@@ -11,7 +11,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================
-// SESSION CONFIGURATION - FIXED FOR RENDER
+// FIX: Trust proxy for Render
+// ============================================
+app.set('trust proxy', 1);
+
+// ============================================
+// SESSION CONFIGURATION
 // ============================================
 
 app.use(session({
@@ -19,7 +24,7 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
   cookie: {
-    secure: false, // Important for Render
+    secure: false,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
   }
@@ -37,10 +42,15 @@ app.use(cors({
 }));
 app.use(express.static('public'));
 
+// ============================================
+// FIX: Increased rate limit
+// ============================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, please try again later.' }
+  max: 200, // Increased from 100 to 200
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api/', limiter);
 
@@ -52,7 +62,6 @@ app.set('views', path.join(__dirname, 'views'));
 // ============================================
 
 function isAuthenticated(req, res, next) {
-  console.log('Session:', req.session); // Debug
   if (req.session && req.session.isAuthenticated) {
     return next();
   }
@@ -80,9 +89,6 @@ app.get('/login', (req, res) => {
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   
-  console.log('Login attempt - Username:', username);
-  console.log('Login attempt - Password:', password);
-  
   if (!username || !password) {
     return res.render('login', { error: 'Username and password required' });
   }
@@ -90,17 +96,12 @@ app.post('/login', async (req, res) => {
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
   
-  console.log('Expected Username:', adminUsername);
-  console.log('Expected Password:', adminPassword);
-  
   if (username === adminUsername && password === adminPassword) {
     req.session.isAuthenticated = true;
     req.session.username = username;
-    console.log('✅ Login successful!');
     return res.redirect('/dashboard');
   }
   
-  console.log('❌ Login failed - Invalid credentials');
   res.render('login', { error: 'Invalid username or password' });
 });
 
@@ -291,9 +292,6 @@ async function createDefaultAdmin() {
     const username = process.env.ADMIN_USERNAME || 'admin';
     const password = process.env.ADMIN_PASSWORD || 'password123';
     
-    console.log('Creating admin with username:', username);
-    console.log('Creating admin with password:', password);
-    
     const existing = await db.getAdmin(username);
     if (!existing) {
       const hash = await bcrypt.hash(password, 10);
@@ -317,12 +315,12 @@ createDefaultAdmin().then(() => {
     console.log('\n' + '='.repeat(50));
     console.log('🚀 Server is running!');
     console.log('='.repeat(50));
-    console.log(`📡 URL: http://localhost:${PORT}`);
-    console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
+    console.log(`📡 URL: https://wantmatures-approval-server.onrender.com`);
+    console.log(`📊 Dashboard: https://wantmatures-approval-server.onrender.com/dashboard`);
     console.log(`🔑 Username: ${process.env.ADMIN_USERNAME || 'admin'}`);
     console.log(`🔒 Password: ${process.env.ADMIN_PASSWORD || 'password123'}`);
     console.log('='.repeat(50));
-    console.log('⚠️  IMPORTANT: Change your password in .env file!');
+    console.log('⚠️  IMPORTANT: Change your password in Render env vars!');
     console.log('='.repeat(50) + '\n');
   });
 });
