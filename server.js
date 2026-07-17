@@ -10,15 +10,24 @@ const db = require('./database');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ============================================
+// SESSION CONFIGURATION - FIXED FOR RENDER
+// ============================================
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret-change-me',
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000
+    secure: false, // Important for Render
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
   }
 }));
+
+// ============================================
+// MIDDLEWARE
+// ============================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -38,7 +47,12 @@ app.use('/api/', limiter);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// ============================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================
+
 function isAuthenticated(req, res, next) {
+  console.log('Session:', req.session); // Debug
   if (req.session && req.session.isAuthenticated) {
     return next();
   }
@@ -51,6 +65,63 @@ function isApiAuthenticated(req, res, next) {
   }
   res.status(401).json({ error: 'Unauthorized', message: 'Please log in' });
 }
+
+// ============================================
+// WEB ROUTES
+// ============================================
+
+app.get('/login', (req, res) => {
+  if (req.session && req.session.isAuthenticated) {
+    return res.redirect('/dashboard');
+  }
+  res.render('login', { error: null });
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  console.log('Login attempt - Username:', username);
+  console.log('Login attempt - Password:', password);
+  
+  if (!username || !password) {
+    return res.render('login', { error: 'Username and password required' });
+  }
+
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+  
+  console.log('Expected Username:', adminUsername);
+  console.log('Expected Password:', adminPassword);
+  
+  if (username === adminUsername && password === adminPassword) {
+    req.session.isAuthenticated = true;
+    req.session.username = username;
+    console.log('✅ Login successful!');
+    return res.redirect('/dashboard');
+  }
+  
+  console.log('❌ Login failed - Invalid credentials');
+  res.render('login', { error: 'Invalid username or password' });
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+app.get('/dashboard', isAuthenticated, async (req, res) => {
+  const devices = await db.getDevices();
+  const stats = await db.getStats();
+  res.render('dashboard', { 
+    username: req.session.username,
+    devices: devices,
+    stats: stats
+  });
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/dashboard');
+});
 
 // ============================================
 // API ROUTES
@@ -212,69 +283,6 @@ app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
 });
 
 // ============================================
-// WEB ROUTES
-// ============================================
-
-app.get('/login', (req, res) => {
-  if (req.session && req.session.isAuthenticated) {
-    return res.redirect('/dashboard');
-  }
-  res.render('login', { error: null });
-});
-
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  
-  if (!username || !password) {
-    return res.render('login', { error: 'Username and password required' });
-  }
-
-  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
-  
-  if (username === adminUsername && password === adminPassword) {
-    req.session.isAuthenticated = true;
-    req.session.username = username;
-    return res.redirect('/dashboard');
-  }
-  
-  try {
-    const admin = await db.getAdmin(username);
-    if (admin) {
-      const match = await bcrypt.compare(password, admin.password_hash);
-      if (match) {
-        req.session.isAuthenticated = true;
-        req.session.username = username;
-        return res.redirect('/dashboard');
-      }
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-  }
-  
-  res.render('login', { error: 'Invalid username or password' });
-});
-
-app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
-});
-
-app.get('/dashboard', isAuthenticated, async (req, res) => {
-  const devices = await db.getDevices();
-  const stats = await db.getStats();
-  res.render('dashboard', { 
-    username: req.session.username,
-    devices: devices,
-    stats: stats
-  });
-});
-
-app.get('/', (req, res) => {
-  res.redirect('/dashboard');
-});
-
-// ============================================
 // CREATE DEFAULT ADMIN
 // ============================================
 
@@ -282,6 +290,9 @@ async function createDefaultAdmin() {
   try {
     const username = process.env.ADMIN_USERNAME || 'admin';
     const password = process.env.ADMIN_PASSWORD || 'password123';
+    
+    console.log('Creating admin with username:', username);
+    console.log('Creating admin with password:', password);
     
     const existing = await db.getAdmin(username);
     if (!existing) {
@@ -296,6 +307,10 @@ async function createDefaultAdmin() {
     console.error('Failed to create default admin:', error);
   }
 }
+
+// ============================================
+// START SERVER
+// ============================================
 
 createDefaultAdmin().then(() => {
   app.listen(PORT, () => {
