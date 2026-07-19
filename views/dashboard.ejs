@@ -100,14 +100,13 @@
     <div class="stat-card"><div class="number green"><%= stats.approved %></div><div class="label">Auto-Approved</div></div>
     <div class="stat-card"><div class="number red"><%= stats.revoked %></div><div class="label">Revoked</div></div>
     <div class="stat-card"><div class="number blue"><%= stats.totalCodes %></div><div class="label">Codes</div></div>
-    <div class="stat-card"><div class="number purple"><%= stats.pendingRequests %></div><div class="label">Pending Requests</div></div>
+    <div class="stat-card"><div class="number purple"><%= stats.pendingRequests %></div><div class="label">Pending Code Requests</div></div>
   </div>
 
   <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="devices">📱 Devices</div>
     <div class="tab" data-tab="codes">🔑 Codes <% if (stats.totalCodes > 0) { %><span class="badge"><%= stats.totalCodes %></span><% } %></div>
-    <div class="tab" data-tab="requests">📨 Device Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
     <div class="tab" data-tab="coderequests">📨 Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
   </div>
 
@@ -220,38 +219,6 @@
     </div>
   </div>
 
-  <!-- ==================== TAB: DEVICE REQUESTS ==================== -->
-  <div id="tab-requests" class="tab-content">
-    <div class="section">
-      <h2>📨 Device Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
-      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">
-        Users request device access. You can approve to add them or reject.
-      </p>
-      <% 
-        const pendingRequests = requests || [];
-        const hasPending = pendingRequests.length > 0;
-      %>
-      <% if (!hasPending) { %>
-        <div class="empty">No pending device requests.</div>
-      <% } else { %>
-        <% pendingRequests.forEach(req => { %>
-          <div class="request-item">
-            <div class="info">
-              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
-              <div class="code">🔑 Code: <span style="font-family:monospace"><%= req.code || 'No code' %></span></div>
-              <div class="reason">💬 <%= req.reason || 'Requesting device access' %></div>
-              <div class="time">📅 Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
-            </div>
-            <div class="actions">
-              <button class="btn-sm approve" onclick="approveDeviceRequest('<%= req.id %>', '<%= req.device_id %>')">✅ Approve</button>
-              <button class="btn-sm revoke" onclick="rejectRequest('<%= req.id %>')">❌ Reject</button>
-            </div>
-          </div>
-        <% }) %>
-      <% } %>
-    </div>
-  </div>
-
   <!-- ==================== TAB: CODE REQUESTS ==================== -->
   <div id="tab-coderequests" class="tab-content">
     <div class="section">
@@ -314,7 +281,7 @@ function showToast(message, type = 'info') {
 }
 
 // ============================================
-// SIMPLIFIED: GENERATE CODE (Just username + device limit)
+// GENERATE CODE
 // ============================================
 async function generateCodeSimple() {
   const username = document.getElementById('gen-username').value.trim();
@@ -366,7 +333,6 @@ async function generateCodeSimple() {
   genBtn.textContent = '🚀 Generate';
 }
 
-// Enter key support for generate
 document.getElementById('gen-username').addEventListener('keypress', function(e) {
   if (e.key === 'Enter') generateCodeSimple();
 });
@@ -417,15 +383,16 @@ async function extendCode(code) {
 }
 
 // ============================================
-// REMOVE USER
+// REMOVE USER - This will deactivate the extension immediately
 // ============================================
 async function removeUser(deviceId) {
   if (!confirm('🗑️ Remove this user? This will FREE UP a slot and the device will need to re-enter the code.')) return;
   try {
     const result = await apiRequest('/api/device/' + deviceId, 'DELETE');
     if (result.success) {
-      showToast('✅ User removed! Slot freed.', 'success');
-      location.reload();
+      showToast('✅ User removed! Slot freed. Device must re-enter code.', 'success');
+      // Wait a moment then refresh to show updated list
+      setTimeout(() => location.reload(), 1500);
     } else {
       showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
@@ -453,15 +420,14 @@ async function reactivateDevice(deviceId) {
 }
 
 // ============================================
-// EDIT DEVICE - Admin can manually add/edit devices
+// EDIT DEVICE - Assign code manually
 // ============================================
 async function editDevice(deviceId) {
-  const action = prompt('What would you like to do?\n\n1. Assign device to a code\n2. Remove device\n3. Reactivate device\n\nEnter 1, 2, or 3:');
+  const action = prompt('What would you like to do?\n\n1. Assign device to a code\n2. Remove device\n\nEnter 1 or 2:');
   
   if (!action) return;
   
   if (action === '1') {
-    // Add device to code
     const code = prompt('Enter the activation code to assign:').toUpperCase();
     if (!code) return;
     if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) {
@@ -481,35 +447,7 @@ async function editDevice(deviceId) {
       showToast('❌ Error: ' + e.message, 'error');
     }
   } else if (action === '2') {
-    // Remove device
     removeUser(deviceId);
-  } else if (action === '3') {
-    // Reactivate device
-    reactivateDevice(deviceId);
-  }
-}
-
-// ============================================
-// APPROVE DEVICE REQUEST
-// ============================================
-async function approveDeviceRequest(requestId, deviceId) {
-  if (!confirm('✅ Approve this device request?\n\nDevice will be added to the system.')) return;
-  
-  try {
-    // First approve the request
-    const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
-      status: 'approved',
-      response: 'Device request approved'
-    });
-    
-    if (result.success) {
-      showToast('✅ Device request approved!', 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
