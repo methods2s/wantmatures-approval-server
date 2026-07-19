@@ -98,6 +98,7 @@
     <div class="tab active" data-tab="devices">Devices</div>
     <div class="tab" data-tab="codes">Codes</div>
     <div class="tab" data-tab="requests">Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
+    <div class="tab" data-tab="coderequests">Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
   </div>
 
   <!-- Tab: Devices -->
@@ -129,7 +130,6 @@
                   <td><%= device.ping_count || 0 %></td>
                   <td style="font-size:11px"><%= new Date(device.created_at).toLocaleDateString() %></td>
                   <td>
-                    <!-- REMOVE USER - frees up slot, device needs to re-enter code -->
                     <button class="btn-sm remove" onclick="removeUser('<%= device.device_id %>')">🗑️ Remove</button>
                     <% if (device.status === 'revoked') { %>
                       <button class="btn-sm reactivate" onclick="reactivateDevice('<%= device.device_id %>')">Reactivate</button>
@@ -150,7 +150,6 @@
       <h2>🔑 Activation Codes <span class="badge"><%= codes.length %></span></h2>
       <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Users enter these codes and are auto-approved instantly.</p>
       
-      <!-- Generate Code -->
       <div class="code-gen">
         <label>Max Devices:</label>
         <input type="number" id="max-devices" value="10" min="1">
@@ -200,7 +199,7 @@
     </div>
   </div>
 
-  <!-- Tab: Requests -->
+  <!-- Tab: Requests (More Slots) -->
   <div id="tab-requests" class="tab-content">
     <div class="section">
       <h2>📨 Slot Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
@@ -223,6 +222,32 @@
             <div class="actions">
               <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">✅ Approve & Extend</button>
               <button class="btn-sm revoke" onclick="respondRequest(<%= req.id %>, 'rejected')">❌ Reject</button>
+            </div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Tab: Code Requests -->
+  <div id="tab-coderequests" class="tab-content">
+    <div class="section">
+      <h2>📨 Code Requests <span class="badge orange"><%= codeRequests ? codeRequests.length : 0 %></span></h2>
+      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">Users requesting activation codes. Generate a code for them.</p>
+      
+      <% if (!codeRequests || codeRequests.length === 0) { %>
+        <div class="empty">No code requests.</div>
+      <% } else { %>
+        <% codeRequests.forEach(req => { %>
+          <div class="request-item">
+            <div class="info">
+              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
+              <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
+              <div style="font-size:10px;color:#8b949e">Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
+            </div>
+            <div class="actions">
+              <button class="btn-sm approve" onclick="generateCodeForUser('<%= req.id %>')">Generate Code</button>
+              <button class="btn-sm revoke" onclick="rejectRequest('<%= req.id %>')">Reject</button>
             </div>
           </div>
         <% }) %>
@@ -317,7 +342,7 @@ async function extendCode(code) {
   }
 }
 
-// REMOVE USER - frees up slot, device needs to re-enter code
+// Remove User
 async function removeUser(deviceId) {
   if (!confirm('🗑️ Remove this user? This will FREE UP a slot and the device will need to re-enter the code.')) return;
   try {
@@ -349,7 +374,7 @@ async function reactivateDevice(deviceId) {
   }
 }
 
-// Respond to Request - AUTO-EXTENDS code when approved
+// Respond to Request (More Slots)
 async function respondRequest(requestId, status) {
   const action = status === 'approved' ? 'Approve' : 'Reject';
   if (!confirm(action + ' this request? ' + (status === 'approved' ? 'This will auto-extend the code limit!' : ''))) return;
@@ -362,6 +387,54 @@ async function respondRequest(requestId, status) {
     });
     if (result.success) {
       showToast('Request ' + status + (status === 'approved' ? ' - Code extended!' : ''), 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Generate Code for User
+async function generateCodeForUser(requestId) {
+  const email = prompt('Enter the user\'s email address:');
+  if (email === null) return;
+  if (!email || !email.includes('@')) {
+    showToast('Invalid email address', 'error');
+    return;
+  }
+  
+  const maxDevices = parseInt(prompt('Max devices for this code:', '10')) || 10;
+  
+  if (!confirm(`Generate code for ${email} with ${maxDevices} device limit?`)) return;
+  
+  try {
+    const result = await apiRequest('/api/generate-code-for-user', 'POST', { 
+      email, 
+      maxDevices 
+    });
+    if (result.success) {
+      showToast('✅ Code generated: ' + result.code + ' for ' + email, 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Reject Request
+async function rejectRequest(requestId) {
+  if (!confirm('Reject this request?')) return;
+  try {
+    const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
+      status: 'rejected',
+      response: 'Request rejected'
+    });
+    if (result.success) {
+      showToast('Request rejected', 'success');
       location.reload();
     } else {
       showToast('Failed: ' + (result.error || 'Unknown error'), 'error');

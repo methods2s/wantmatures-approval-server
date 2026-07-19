@@ -1,36 +1,47 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0a0a1a 0%,#1a1a3e 50%,#0f3460 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.login-container{background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.1);padding:40px;border-radius:20px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}.logo{text-align:center;font-size:48px;margin-bottom:10px}h1{text-align:center;color:#fff;font-size:24px;margin-bottom:8px;font-weight:600}.subtitle{text-align:center;color:#888;font-size:14px;margin-bottom:30px}.form-group{margin-bottom:20px}label{display:block;color:#aaa;font-size:13px;font-weight:500;margin-bottom:6px}input{width:100%;padding:12px 16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:15px;transition:all .3s}input:focus{outline:none;border-color:#4CAF50;background:rgba(255,255,255,0.12)}input::placeholder{color:#666}button{width:100%;padding:14px;background:linear-gradient(135deg,#4CAF50,#45a049);color:white;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:all .3s}button:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(76,175,80,0.3)}.error{background:rgba(244,67,54,0.15);color:#ff6b6b;padding:10px 14px;border-radius:8px;margin-bottom:20px;font-size:14px;border:1px solid rgba(244,67,54,0.2)}.footer{text-align:center;margin-top:24px;color:#555;font-size:12px}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh}
+    .login-box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:40px;width:100%;max-width:400px}
+    .login-box h1{font-size:24px;color:#f0f6fc;text-align:center;margin-bottom:8px}
+    .login-box .subtitle{text-align:center;color:#8b949e;font-size:14px;margin-bottom:30px}
+    .form-group{margin-bottom:16px}
+    .form-group label{display:block;font-size:13px;color:#8b949e;margin-bottom:4px}
+    .form-group input{width:100%;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#f0f6fc;font-size:14px}
+    .form-group input:focus{outline:none;border-color:#58a6ff}
+    .btn{width:100%;padding:12px;background:#238636;color:#fff;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer}
+    .btn:hover{background:#2ea043}
+    .error{background:#da363333;color:#f85149;padding:10px;border-radius:6px;margin-bottom:16px;text-align:center;font-size:13px}
+    .footer{text-align:center;color:#8b949e;font-size:12px;margin-top:20px}
+  </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo">🔐</div>
-        <h1>Extension Control</h1>
-        <p class="subtitle">Admin Dashboard Login</p>
-        
-        <% if (error) { %>
-            <div class="error">⚠️ <%= error %></div>
-        <% } %>
-        
-        <form method="POST" action="/login">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter password" required>
-            </div>
-            <button type="submit">Sign In</button>
-        </form>
-        
-        <div class="footer">Wantmatures Auto Clicker v5.8.0</div>
+<div class="login-box">
+  <h1>🔐 Admin Login</h1>
+  <div class="subtitle">Wantmatures Approval Dashboard</div>
+  
+  <% if (error) { %>
+    <div class="error">❌ <%= error %></div>
+  <% } %>
+  
+  <form action="/login" method="POST">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" placeholder="Enter username" required autofocus>
     </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Enter password" required>
+    </div>
+    <button type="submit" class="btn">Login</button>
+  </form>
+  
+  <div class="footer">v5.9.0 • Code Activation System</div>
+</div>
 </body>
 </html>

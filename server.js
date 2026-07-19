@@ -97,13 +97,17 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const stats = await db.getStats();
   const codes = await db.getAllCodes();
   const requests = await db.getPendingRequests();
+  const codeRequests = await db.all(
+    `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
+  );
   
   res.render('dashboard', { 
     username: req.session.username,
     devices: devices,
     stats: stats,
     codes: codes,
-    requests: requests
+    requests: requests,
+    codeRequests: codeRequests
   });
 });
 
@@ -115,8 +119,7 @@ app.get('/', (req, res) => {
 // API ROUTES
 // ============================================
 
-// ---------- REGISTRATION WITH AUTO-APPROVAL ----------
-
+// Registration with AUTO-APPROVAL
 app.post('/api/register', async (req, res) => {
   const { deviceId, userAgent, browserInfo, code } = req.body;
   
@@ -143,7 +146,7 @@ app.post('/api/register', async (req, res) => {
 
     res.json({
       success: true,
-      status: result.status, // Always 'approved' now
+      status: result.status,
       code: result.code,
       message: `Device registered and auto-approved!`
     });
@@ -153,8 +156,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// ---------- STATUS CHECK ----------
-
+// Status check
 app.get('/api/status/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
   
@@ -183,8 +185,74 @@ app.get('/api/status/:deviceId', async (req, res) => {
   }
 });
 
-// ---------- CODE MANAGEMENT (Admin) ----------
+// Request Code (for new users)
+app.post('/api/request-code', async (req, res) => {
+  const { email, deviceId } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  
+  try {
+    console.log(`📨 Code request from ${email} (Device: ${deviceId || 'unknown'})`);
+    
+    await db.run(
+      `INSERT INTO requests (device_id, code, reason, status)
+       VALUES (?, ?, ?, 'pending')`,
+      [deviceId || 'unknown', null, `New user request: ${email}`]
+    );
+    
+    await db.logUsage(deviceId || 'unknown', null, 'code_request', 
+      `Code requested via email: ${email}`);
+    
+    res.json({
+      success: true,
+      message: 'Code request submitted. Admin will contact you.',
+      email: email
+    });
+    
+  } catch (error) {
+    console.error('Code request error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
 
+// Generate Code for User
+app.post('/api/generate-code-for-user', isApiAuthenticated, async (req, res) => {
+  const { email, maxDevices = 10, notes = '' } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  
+  try {
+    const code = await db.generateCode(maxDevices, req.session.username, notes || `For user: ${email}`);
+    
+    await db.run(
+      `UPDATE requests 
+       SET status = 'approved', 
+           code = ?,
+           admin_response = ?,
+           responded_at = CURRENT_TIMESTAMP
+       WHERE reason LIKE ? AND status = 'pending'`,
+      [code, `Code generated for ${email}`, `%${email}%`]
+    );
+    
+    res.json({
+      success: true,
+      code: code,
+      email: email,
+      maxDevices: maxDevices,
+      message: `Code generated for ${email}`
+    });
+    
+  } catch (error) {
+    console.error('Generate code for user error:', error);
+    res.status(500).json({ error: 'Failed to generate code' });
+  }
+});
+
+// Generate Code (admin)
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   const { maxDevices = 10, notes = '' } = req.body;
   
@@ -202,6 +270,7 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Get all codes
 app.get('/api/codes', isApiAuthenticated, async (req, res) => {
   try {
     const codes = await db.getAllCodes();
@@ -212,6 +281,7 @@ app.get('/api/codes', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Get code usage
 app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
   
@@ -224,6 +294,7 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Deactivate code
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
   
@@ -240,6 +311,7 @@ app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Extend code
 app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
   const { maxDevices } = req.body;
@@ -261,9 +333,7 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- DEVICE MANAGEMENT (Admin) ----------
-
-// REMOVE USER - frees up slot, device needs to re-enter code
+// Remove user (frees slot)
 app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
@@ -283,7 +353,7 @@ app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// Revoke device (alternative to remove)
+// Revoke device
 app.post('/api/revoke/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
@@ -319,8 +389,7 @@ app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- REQUEST MANAGEMENT ----------
-
+// Create request (more slots)
 app.post('/api/request', async (req, res) => {
   const { deviceId, code, reason } = req.body;
   
@@ -345,6 +414,7 @@ app.post('/api/request', async (req, res) => {
   }
 });
 
+// Get all requests
 app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.getAllRequests();
@@ -355,6 +425,7 @@ app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Get pending requests
 app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.getPendingRequests();
@@ -365,6 +436,22 @@ app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Get pending code requests
+app.get('/api/requests/code', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.all(
+      `SELECT * FROM requests 
+       WHERE code IS NULL AND status = 'pending'
+       ORDER BY requested_at DESC`
+    );
+    res.json(requests);
+  } catch (error) {
+    console.error('Get code requests error:', error);
+    res.status(500).json({ error: 'Failed to get code requests' });
+  }
+});
+
+// Respond to request
 app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res) => {
   const { requestId } = req.params;
   const { status, response } = req.body;
@@ -386,8 +473,7 @@ app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res)
   }
 });
 
-// ---------- STATS & LOGS ----------
-
+// Stats
 app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   try {
     const stats = await db.getStats();
@@ -398,6 +484,7 @@ app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Logs
 app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   try {
     const { deviceId, limit = 100 } = req.query;
@@ -409,18 +496,23 @@ app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// Dashboard data
 app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
   try {
     const devices = await db.getDevices();
     const stats = await db.getStats();
     const codes = await db.getAllCodes();
     const requests = await db.getPendingRequests();
+    const codeRequests = await db.all(
+      `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
+    );
     
     res.json({
       stats,
       devices,
       codes,
       requests,
+      codeRequests,
       username: req.session.username
     });
   } catch (error) {
@@ -461,8 +553,8 @@ createDefaultAdmin().then(() => {
     console.log('\n' + '='.repeat(50));
     console.log('🚀 Server is running!');
     console.log('='.repeat(50));
-    console.log(`📡 URL: https://wantmatures-approval-server.onrender.com`);
-    console.log(`📊 Dashboard: https://wantmatures-approval-server.onrender.com/dashboard`);
+    console.log(`📡 URL: http://localhost:${PORT}`);
+    console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
     console.log(`🔑 Username: ${process.env.ADMIN_USERNAME || 'admin'}`);
     console.log(`🔒 Password: ${process.env.ADMIN_PASSWORD || 'password123'}`);
     console.log('='.repeat(50));

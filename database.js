@@ -44,7 +44,6 @@ class DeviceDatabase {
   }
 
   initTables() {
-    // Devices table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,7 +63,6 @@ class DeviceDatabase {
       )
     `);
 
-    // Codes table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS codes (
         code TEXT PRIMARY KEY,
@@ -78,7 +76,6 @@ class DeviceDatabase {
       )
     `);
 
-    // Requests table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,7 +197,6 @@ class DeviceDatabase {
   // ============================================
 
   async registerDeviceWithCode(deviceId, userAgent, ip, browserInfo, code) {
-    // Check if code exists and is active
     const codeInfo = await this.getCodeInfo(code);
     if (!codeInfo) {
       return { success: false, error: 'Invalid code' };
@@ -214,10 +210,8 @@ class DeviceDatabase {
       return { success: false, error: 'Code has expired' };
     }
 
-    // Check if device already exists
     const existingDevice = await this.getDevice(deviceId);
     if (existingDevice) {
-      // If device exists with this code, just reactivate/update
       if (existingDevice.code === code) {
         await this.run(
           `UPDATE devices 
@@ -232,25 +226,20 @@ class DeviceDatabase {
         await this.logUsage(deviceId, code, 're-register', 'Device re-registered');
         return { success: true, status: 'approved', code: code };
       }
-      // Device exists with different code - allow re-register if code has space
-      // But we'll check limit first
     }
 
-    // Check code usage limit
     const usage = await this.getCodeUsage(code);
     if (usage.used >= usage.max) {
       await this.logUsage(deviceId, code, 'registration_failed', 'Code limit reached');
       return { success: false, error: `Code limit reached (${usage.max} devices max)`, limitReached: true };
     }
 
-    // Register device with AUTO-APPROVAL
     await this.run(
       `INSERT INTO devices (device_id, user_agent, ip_address, browser_info, code, status, approved_at)
        VALUES (?, ?, ?, ?, ?, 'approved', CURRENT_TIMESTAMP)`,
       [deviceId, userAgent || '', ip || '', browserInfo || '', code]
     );
 
-    // Update code usage count
     await this.run(
       `UPDATE codes SET used_count = used_count + 1 WHERE code = ?`,
       [code]
@@ -265,13 +254,11 @@ class DeviceDatabase {
   // ============================================
 
   async createRequest(deviceId, code, reason = '') {
-    // Check if device exists
     const device = await this.getDevice(deviceId);
     if (!device) {
       return { success: false, error: 'Device not found' };
     }
 
-    // Check if there's already a pending request
     const existing = await this.get(
       `SELECT * FROM requests WHERE device_id = ? AND status = 'pending'`,
       [deviceId]
@@ -328,8 +315,7 @@ class DeviceDatabase {
       await this.logUsage(request.device_id, request.code, 'request_response', 
         `Request ${status}: ${adminResponse}`);
       
-      // If approved, update the code limit
-      if (status === 'approved') {
+      if (status === 'approved' && request.code) {
         const codeInfo = await this.getCodeInfo(request.code);
         if (codeInfo) {
           const newLimit = codeInfo.max_devices + 1;
@@ -351,7 +337,7 @@ class DeviceDatabase {
   }
 
   // ============================================
-  // DEVICE MANAGEMENT (with slot freeing)
+  // DEVICE MANAGEMENT
   // ============================================
 
   async getDevice(deviceId) {
@@ -375,19 +361,16 @@ class DeviceDatabase {
     return await this.all(`SELECT * FROM devices WHERE code = ? ORDER BY created_at DESC`, [code]);
   }
 
-  // REMOVE USER - frees up a slot and device will need to re-enter code
   async removeUser(deviceId) {
     const device = await this.getDevice(deviceId);
     if (!device) return false;
 
-    // Delete the device completely (frees up the slot)
     const result = await this.run(
       `DELETE FROM devices WHERE device_id = ?`,
       [deviceId]
     );
     
     if (result.changes > 0) {
-      // Decrement code usage count
       if (device.code) {
         await this.run(
           `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
@@ -400,7 +383,6 @@ class DeviceDatabase {
     return false;
   }
 
-  // Alternative: Revoke but keep record
   async revokeDevice(deviceId) {
     const device = await this.getDevice(deviceId);
     if (!device) return false;
@@ -415,7 +397,6 @@ class DeviceDatabase {
     );
     
     if (result.changes > 0) {
-      // Decrement code usage count
       if (device.code) {
         await this.run(
           `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
@@ -428,12 +409,10 @@ class DeviceDatabase {
     return false;
   }
 
-  // Reactivate a revoked device
   async reactivateDevice(deviceId) {
     const device = await this.getDevice(deviceId);
     if (!device) return false;
 
-    // Check if code still has space
     if (device.code) {
       const usage = await this.getCodeUsage(device.code);
       const codeInfo = await this.getCodeInfo(device.code);
