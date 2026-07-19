@@ -60,6 +60,8 @@
     .btn-sm.reactivate:hover{background:#388bfd}
     .btn-sm.extend{background:#1f6feb;border-color:#1f6feb;color:#fff}
     .btn-sm.extend:hover{background:#388bfd}
+    .btn-sm.edit{background:#d29922;border-color:#d29922;color:#fff}
+    .btn-sm.edit:hover{background:#e6a700}
     .empty{color:#8b949e;text-align:center;padding:20px}
     .request-item{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .request-item .info{flex:1}
@@ -76,7 +78,6 @@
     .tab-content.active{display:block}
     .limit-full{color:#d29922;font-size:11px;font-weight:bold}
     .auto-approve-badge{background:#23863633;color:#3fb950;padding:2px 10px;border-radius:12px;font-size:10px;display:inline-block}
-    .code-display{font-family:monospace;font-size:18px;color:#58a6ff;letter-spacing:2px}
     @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen .gen-row{flex-direction:column;align-items:stretch}.code-gen .gen-field{min-width:auto}table{font-size:11px}td,th{padding:6px 8px}}
   </style>
 </head>
@@ -106,7 +107,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="devices">📱 Devices</div>
     <div class="tab" data-tab="codes">🔑 Codes <% if (stats.totalCodes > 0) { %><span class="badge"><%= stats.totalCodes %></span><% } %></div>
-    <div class="tab" data-tab="requests">📨 Slot Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
+    <div class="tab" data-tab="requests">📨 Device Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
     <div class="tab" data-tab="coderequests">📨 Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
   </div>
 
@@ -140,6 +141,7 @@
                   <td style="font-size:11px"><%= new Date(device.created_at).toLocaleDateString() %></td>
                   <td>
                     <button class="btn-sm remove" onclick="removeUser('<%= device.device_id %>')">🗑️ Remove</button>
+                    <button class="btn-sm edit" onclick="editDevice('<%= device.device_id %>')">✏️ Edit</button>
                     <% if (device.status === 'revoked') { %>
                       <button class="btn-sm reactivate" onclick="reactivateDevice('<%= device.device_id %>')">Reactivate</button>
                     <% } %>
@@ -218,29 +220,31 @@
     </div>
   </div>
 
-  <!-- ==================== TAB: SLOT REQUESTS ==================== -->
+  <!-- ==================== TAB: DEVICE REQUESTS ==================== -->
   <div id="tab-requests" class="tab-content">
     <div class="section">
-      <h2>📨 Slot Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
-      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">Users request more slots when their code is full. Approving automatically extends the code limit.</p>
+      <h2>📨 Device Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
+      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">
+        Users request device access. You can approve to add them or reject.
+      </p>
       <% 
         const pendingRequests = requests || [];
         const hasPending = pendingRequests.length > 0;
       %>
       <% if (!hasPending) { %>
-        <div class="empty">No pending requests.</div>
+        <div class="empty">No pending device requests.</div>
       <% } else { %>
         <% pendingRequests.forEach(req => { %>
           <div class="request-item">
             <div class="info">
               <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
               <div class="code">🔑 Code: <span style="font-family:monospace"><%= req.code || 'No code' %></span></div>
-              <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
+              <div class="reason">💬 <%= req.reason || 'Requesting device access' %></div>
               <div class="time">📅 Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
             </div>
             <div class="actions">
-              <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">✅ Approve & Extend</button>
-              <button class="btn-sm revoke" onclick="respondRequest(<%= req.id %>, 'rejected')">❌ Reject</button>
+              <button class="btn-sm approve" onclick="approveDeviceRequest('<%= req.id %>', '<%= req.device_id %>')">✅ Approve</button>
+              <button class="btn-sm revoke" onclick="rejectRequest('<%= req.id %>')">❌ Reject</button>
             </div>
           </div>
         <% }) %>
@@ -449,20 +453,57 @@ async function reactivateDevice(deviceId) {
 }
 
 // ============================================
-// RESPOND TO SLOT REQUEST
+// EDIT DEVICE - Admin can manually add/edit devices
 // ============================================
-async function respondRequest(requestId, status) {
-  const action = status === 'approved' ? 'Approve' : 'Reject';
-  if (!confirm(action + ' this request? ' + (status === 'approved' ? 'This will auto-extend the code limit!' : ''))) return;
+async function editDevice(deviceId) {
+  const action = prompt('What would you like to do?\n\n1. Assign device to a code\n2. Remove device\n3. Reactivate device\n\nEnter 1, 2, or 3:');
   
-  const response = prompt('Admin response (optional):');
+  if (!action) return;
+  
+  if (action === '1') {
+    // Add device to code
+    const code = prompt('Enter the activation code to assign:').toUpperCase();
+    if (!code) return;
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) {
+      showToast('Invalid code format', 'error');
+      return;
+    }
+    
+    try {
+      const result = await apiRequest('/api/device/' + deviceId + '/assign-code', 'POST', { code });
+      if (result.success) {
+        showToast('✅ Device assigned to code: ' + code, 'success');
+        location.reload();
+      } else {
+        showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
+      }
+    } catch (e) {
+      showToast('❌ Error: ' + e.message, 'error');
+    }
+  } else if (action === '2') {
+    // Remove device
+    removeUser(deviceId);
+  } else if (action === '3') {
+    // Reactivate device
+    reactivateDevice(deviceId);
+  }
+}
+
+// ============================================
+// APPROVE DEVICE REQUEST
+// ============================================
+async function approveDeviceRequest(requestId, deviceId) {
+  if (!confirm('✅ Approve this device request?\n\nDevice will be added to the system.')) return;
+  
   try {
+    // First approve the request
     const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
-      status, 
-      response: response || '' 
+      status: 'approved',
+      response: 'Device request approved'
     });
+    
     if (result.success) {
-      showToast('✅ Request ' + status + (status === 'approved' ? ' - Code extended!' : ''), 'success');
+      showToast('✅ Device request approved!', 'success');
       location.reload();
     } else {
       showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
