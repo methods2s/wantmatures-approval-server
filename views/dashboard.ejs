@@ -1,59 +1,387 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a1a;color:#e0e0e0;min-height:100vh}.header{background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);padding:20px 30px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px}.header h1{font-size:20px;font-weight:600;color:#fff}.header h1 span{color:#4CAF50}.header-actions{display:flex;gap:12px;align-items:center}.user-badge{color:#888;font-size:14px}.btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block}.btn-danger{background:#f44336;color:white}.btn-danger:hover{background:#d32f2f}.btn-success{background:#4CAF50;color:white}.btn-success:hover{background:#45a049}.btn-warning{background:#FF9800;color:white}.btn-warning:hover{background:#F57C00}.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.2);color:#e0e0e0}.btn-outline:hover{background:rgba(255,255,255,0.05)}.btn-sm{padding:4px 10px;font-size:11px}.container{max-width:1400px;margin:0 auto;padding:20px 30px}.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:30px}.stat-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);padding:18px 20px;border-radius:12px;text-align:center}.stat-card .number{font-size:28px;font-weight:700;display:block}.stat-card .label{font-size:12px;color:#888;margin-top:4px}.stat-card.pending .number{color:#FF9800}.stat-card.approved .number{color:#4CAF50}.stat-card.revoked .number{color:#f44336}.stat-card.total .number{color:#2196F3}.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px}.section-header h2{font-size:18px;font-weight:600}.section-header .badge{background:rgba(255,152,0,0.2);color:#FF9800;padding:2px 12px;border-radius:20px;font-size:12px}.device-table{width:100%;background:rgba(255,255,255,0.03);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}.device-table table{width:100%;border-collapse:collapse}.device-table th{text-align:left;padding:12px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03)}.device-table td{padding:12px 16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}.device-table tr:hover td{background:rgba(255,255,255,0.03)}.status-badge{display:inline-block;padding:2px 12px;border-radius:20px;font-size:11px;font-weight:600}.status-badge.pending{background:rgba(255,152,0,0.2);color:#FF9800}.status-badge.approved{background:rgba(76,175,80,0.2);color:#4CAF50}.status-badge.revoked{background:rgba(244,67,54,0.2);color:#f44336}.device-id{font-family:'Courier New',monospace;font-size:12px;color:#888;word-break:break-all;max-width:200px}.actions{display:flex;gap:6px;flex-wrap:wrap}.empty-state{text-align:center;padding:40px;color:#666}.empty-state .icon{font-size:48px;display:block;margin-bottom:12px}@media(max-width:768px){.container{padding:15px}.header{padding:15px}.device-table{overflow-x:auto}.device-table td,.device-table th{padding:8px 10px;font-size:12px}.stats-grid{grid-template-columns:repeat(2,1fr)}.device-id{max-width:100px;font-size:10px}}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Wantmatures Approval</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px}
+    .container{max-width:1400px;margin:0 auto}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;background:#161b22;border-radius:10px;border:1px solid #30363d;margin-bottom:20px}
+    .header h1{font-size:22px;color:#f0f6fc}
+    .header .user{color:#8b949e;font-size:14px}
+    .header .user span{color:#f0f6fc}
+    .logout-btn{background:#da3633;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+    .logout-btn:hover{background:#f85149}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+    .stat-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;text-align:center}
+    .stat-card .number{font-size:28px;font-weight:bold;color:#f0f6fc}
+    .stat-card .label{font-size:12px;color:#8b949e;margin-top:4px}
+    .stat-card .number.green{color:#3fb950}
+    .stat-card .number.orange{color:#d29922}
+    .stat-card .number.red{color:#f85149}
+    .stat-card .number.blue{color:#58a6ff}
+    .stat-card .number.purple{color:#bc8cff}
+    .section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;margin-bottom:20px}
+    .section h2{font-size:16px;color:#f0f6fc;margin-bottom:15px}
+    .section h2 .badge{background:#1f6feb;color:#fff;font-size:11px;padding:2px 10px;border-radius:12px;margin-left:8px}
+    .section h2 .badge.orange{background:#d29922}
+    .section h2 .badge.red{background:#da3633}
+    .code-gen{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:15px}
+    .code-gen label{color:#8b949e;font-size:13px}
+    .code-gen input{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#f0f6fc;width:80px}
+    .code-gen button{background:#238636;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:bold}
+    .code-gen button:hover{background:#2ea043}
+    .code-gen .generated-code{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 16px;font-family:monospace;font-size:18px;color:#58a6ff;letter-spacing:2px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;padding:10px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:600}
+    td{padding:10px 12px;border-bottom:1px solid #21262d;vertical-align:middle}
+    tr:hover{background:#1c2128}
+    .status-badge{display:inline-block;padding:2px 12px;border-radius:12px;font-size:11px;font-weight:600}
+    .status-badge.approved{background:#23863633;color:#3fb950}
+    .status-badge.pending{background:#d2992233;color:#d29922}
+    .status-badge.revoked{background:#da363333;color:#f85149}
+    .status-badge.not_found{background:#8b949e33;color:#8b949e}
+    .btn-sm{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}
+    .btn-sm:hover{background:#30363d}
+    .btn-sm.approve{background:#238636;border-color:#238636;color:#fff}
+    .btn-sm.approve:hover{background:#2ea043}
+    .btn-sm.revoke{background:#da3633;border-color:#da3633;color:#fff}
+    .btn-sm.revoke:hover{background:#f85149}
+    .btn-sm.delete{background:#8b949e;border-color:#8b949e;color:#fff}
+    .btn-sm.delete:hover{background:#6e7681}
+    .empty{color:#8b949e;text-align:center;padding:20px}
+    .request-item{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    .request-item .info{flex:1}
+    .request-item .info .device{font-weight:bold;color:#f0f6fc}
+    .request-item .info .code{color:#58a6ff;font-family:monospace}
+    .request-item .info .reason{color:#8b949e;font-size:12px;margin-top:2px}
+    .request-item .actions{display:flex;gap:6px}
+    .tabs{display:flex;gap:4px;margin-bottom:15px;border-bottom:1px solid #30363d}
+    .tab{padding:8px 16px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent}
+    .tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
+    .tab:hover{color:#f0f6fc}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen{flex-direction:column;align-items:stretch}.code-gen input{width:100%}table{font-size:11px}td,th{padding:6px 8px}}
+  </style>
 </head>
 <body>
-    <header class="header">
-        <h1>🎮 Wantmatures <span>Control</span></h1>
-        <div class="header-actions">
-            <span class="user-badge">👤 <%= username %></span>
-            <button class="btn btn-outline btn-sm" onclick="refreshData()">🔄 Refresh</button>
-            <a href="/logout" class="btn btn-danger btn-sm">🚪 Logout</a>
-        </div>
-    </header>
-    <div class="container">
-        <div class="stats-grid" id="stats-grid">
-            <div class="stat-card total"><span class="number" id="stat-total">0</span><span class="label">Total Devices</span></div>
-            <div class="stat-card pending"><span class="number" id="stat-pending">0</span><span class="label">Pending Approval</span></div>
-            <div class="stat-card approved"><span class="number" id="stat-approved">0</span><span class="label">Approved</span></div>
-            <div class="stat-card revoked"><span class="number" id="stat-revoked">0</span><span class="label">Revoked</span></div>
-        </div>
-        <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn btn-danger" onclick="revokeAll()">☠️ Kill Switch (Revoke All)</button>
-        </div>
-        <div class="section-header">
-            <h2>📱 Devices</h2>
-            <span class="badge" id="device-count">0 devices</span>
-        </div>
-        <div class="device-table">
-            <table>
-                <thead><tr><th>Status</th><th>Device ID</th><th>Browser</th><th>IP</th><th>Last Ping</th><th>Pings</th><th>Created</th><th>Actions</th></tr></thead>
-                <tbody id="devices-body">
-                    <tr><td colspan="8" class="empty-state"><span class="icon">📭</span>No devices registered yet</td></tr>
-                </tbody>
-            </table>
-        </div>
+<div class="container">
+  <div class="header">
+    <h1>🔐 Approval Dashboard</h1>
+    <div>
+      <span class="user">👤 <span><%= username %></span></span>
+      <form action="/logout" method="GET" style="display:inline">
+        <button type="submit" class="logout-btn">Logout</button>
+      </form>
     </div>
-    <script>
-        let currentDevices=[];
-        function getStatusBadge(s){const l={pending:'⏳ Pending',approved:'✅ Approved',revoked:'❌ Revoked'};return'<span class="status-badge '+s+'">'+(l[s]||s)+'</span>'}
-        function formatDate(d){if(!d)return'Never';const dt=new Date(d);return dt.toLocaleDateString()+' '+dt.toLocaleTimeString()}
-        function renderDevices(d){const t=document.getElementById('devices-body');if(!d||d.length===0){t.innerHTML='<tr><td colspan="8" class="empty-state"><span class="icon">📭</span>No devices registered yet</td></tr>';return}
-        t.innerHTML=d.map(function(device){return'<tr><td>'+getStatusBadge(device.status)+'</td><td><span class="device-id" title="'+device.device_id+'">'+device.device_id.substring(0,20)+'...</span></td><td style="font-size:12px;color:#888;">'+(device.browser_info||'Unknown')+'</td><td style="font-size:12px;color:#888;">'+(device.ip_address||'N/A')+'</td><td style="font-size:12px;color:#888;">'+formatDate(device.last_ping)+'</td><td style="font-size:12px;color:#888;">'+(device.ping_count||0)+'</td><td style="font-size:12px;color:#888;">'+formatDate(device.created_at)+'</td><td><div class="actions">'+(device.status==='pending'?'<button class="btn btn-success btn-sm" onclick="approveDevice(\''+device.device_id+'\')">✅ Approve</button>':'')+(device.status==='approved'?'<button class="btn btn-danger btn-sm" onclick="revokeDevice(\''+device.device_id+'\')">⛔ Revoke</button>':'')+(device.status==='revoked'?'<button class="btn btn-success btn-sm" onclick="approveDevice(\''+device.device_id+'\')">🔄 Re-approve</button>':'')+'<button class="btn btn-warning btn-sm" onclick="deleteDevice(\''+device.device_id+'\')">🗑️ Delete</button></div></td></tr>'}).join('');document.getElementById('device-count').textContent=d.length+' devices'}
-        function updateStats(s){document.getElementById('stat-total').textContent=s.total||0;document.getElementById('stat-pending').textContent=s.pending||0;document.getElementById('stat-approved').textContent=s.approved||0;document.getElementById('stat-revoked').textContent=s.revoked||0}
-        function refreshData(){fetch('/api/dashboard-data').then(function(res){return res.json()}).then(function(data){if(data.error){alert('Error: '+data.error);return}
-        currentDevices=data.devices||[];renderDevices(currentDevices);updateStats(data.stats||{})}).catch(function(err){console.error('Refresh error:',err);alert('Failed to refresh data')})}
-        function approveDevice(id){if(!confirm('Approve device '+id.substring(0,20)+'...?'))return;fetch('/api/approve/'+id,{method:'POST'}).then(function(res){return res.json()}).then(function(data){if(data.success){alert('✅ Device approved!');refreshData()}else{alert('❌ Failed to approve device')}}).catch(function(err){alert('Error: '+err.message)})}
-        function revokeDevice(id){if(!confirm('Revoke device '+id.substring(0,20)+'...?'))return;fetch('/api/revoke/'+id,{method:'POST'}).then(function(res){return res.json()}).then(function(data){if(data.success){alert('⛔ Device revoked!');refreshData()}else{alert('❌ Failed to revoke device')}}).catch(function(err){alert('Error: '+err.message)})}
-        function deleteDevice(id){if(!confirm('⚠️ Permanently delete device '+id.substring(0,20)+'...?'))return;fetch('/api/device/'+id,{method:'DELETE'}).then(function(res){return res.json()}).then(function(data){if(data.success){alert('🗑️ Device deleted!');refreshData()}else{alert('❌ Failed to delete device')}}).catch(function(err){alert('Error: '+err.message)})}
-        function revokeAll(){if(!confirm('☠️ KILL SWITCH: Revoke ALL approved devices? This cannot be undone!'))return;if(!confirm('ARE YOU SURE? This will block ALL users!'))return;fetch('/api/revoke-all',{method:'POST'}).then(function(res){return res.json()}).then(function(data){if(data.success){alert('☠️ Revoked '+data.total+' devices!');refreshData()}else{alert('❌ Failed to revoke all devices')}}).catch(function(err){alert('Error: '+err.message)})}
-        setInterval(refreshData,30000);refreshData();
-    </script>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card"><div class="number"><%= stats.total %></div><div class="label">Total Devices</div></div>
+    <div class="stat-card"><div class="number orange"><%= stats.pending %></div><div class="label">Pending Approval</div></div>
+    <div class="stat-card"><div class="number green"><%= stats.approved %></div><div class="label">Approved</div></div>
+    <div class="stat-card"><div class="number red"><%= stats.revoked %></div><div class="label">Revoked</div></div>
+    <div class="stat-card"><div class="number blue"><%= stats.totalCodes %></div><div class="label">Codes Generated</div></div>
+    <div class="stat-card"><div class="number purple"><%= stats.pendingRequests %></div><div class="label">Pending Requests</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="devices">Devices</div>
+    <div class="tab" data-tab="codes">Codes</div>
+    <div class="tab" data-tab="requests">Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
+  </div>
+
+  <!-- Tab: Devices -->
+  <div id="tab-devices" class="tab-content active">
+    <div class="section">
+      <h2>📱 Devices <span class="badge"><%= devices.length %></span></h2>
+      <% if (devices.length === 0) { %>
+        <div class="empty">No devices registered yet.</div>
+      <% } else { %>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Device ID</th>
+                <th>Code</th>
+                <th>Status</th>
+                <th>Pings</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% devices.forEach(device => { %>
+                <tr>
+                  <td style="font-family:monospace;font-size:11px"><%= device.device_id.substring(0,20) %>…</td>
+                  <td style="font-family:monospace;color:#58a6ff"><%= device.code || '—' %></td>
+                  <td><span class="status-badge <%= device.status %>"><%= device.status %></span></td>
+                  <td><%= device.ping_count || 0 %></td>
+                  <td style="font-size:11px"><%= new Date(device.created_at).toLocaleDateString() %></td>
+                  <td>
+                    <% if (device.status === 'pending') { %>
+                      <button class="btn-sm approve" onclick="approveDevice('<%= device.device_id %>')">Approve</button>
+                    <% } %>
+                    <% if (device.status === 'approved' || device.status === 'pending') { %>
+                      <button class="btn-sm revoke" onclick="revokeDevice('<%= device.device_id %>')">Revoke</button>
+                    <% } %>
+                    <button class="btn-sm delete" onclick="deleteDevice('<%= device.device_id %>')">Delete</button>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Tab: Codes -->
+  <div id="tab-codes" class="tab-content">
+    <div class="section">
+      <h2>🔑 Activation Codes <span class="badge"><%= codes.length %></span></h2>
+      
+      <!-- Generate Code -->
+      <div class="code-gen">
+        <label>Max Devices:</label>
+        <input type="number" id="max-devices" value="10" min="1">
+        <button onclick="generateCode()">Generate Code</button>
+        <span id="generated-code" class="generated-code"></span>
+      </div>
+
+      <% if (codes.length === 0) { %>
+        <div class="empty">No codes generated yet.</div>
+      <% } else { %>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Used / Max</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% codes.forEach(code => { 
+                const usage = code.used_count || 0;
+                const max = code.max_devices || 10;
+                const isFull = usage >= max;
+              %>
+                <tr>
+                  <td style="font-family:monospace;font-size:16px;color:#58a6ff;letter-spacing:1px"><%= code.code %></td>
+                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span style="color:#d29922;font-size:11px">🔴 FULL</span><% } %></td>
+                  <td><span class="status-badge <%= code.is_active ? 'approved' : 'revoked' %>"><%= code.is_active ? 'Active' : 'Inactive' %></span></td>
+                  <td style="font-size:11px"><%= new Date(code.created_at).toLocaleDateString() %></td>
+                  <td style="font-size:11px;color:#8b949e"><%= code.notes || '—' %></td>
+                  <td>
+                    <% if (code.is_active) { %>
+                      <button class="btn-sm revoke" onclick="deactivateCode('<%= code.code %>')">Deactivate</button>
+                    <% } %>
+                    <button class="btn-sm" onclick="extendCode('<%= code.code %>')">Extend</button>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Tab: Requests -->
+  <div id="tab-requests" class="tab-content">
+    <div class="section">
+      <h2>📨 Slot Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
+      <% 
+        const pendingRequests = requests || [];
+        const hasPending = pendingRequests.length > 0;
+      %>
+      <% if (!hasPending) { %>
+        <div class="empty">No pending requests.</div>
+      <% } else { %>
+        <% pendingRequests.forEach(req => { %>
+          <div class="request-item">
+            <div class="info">
+              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id.substring(0,20) %>…</span></div>
+              <div class="code">🔑 Code: <span style="font-family:monospace"><%= req.code || 'No code' %></span></div>
+              <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
+              <div style="font-size:10px;color:#8b949e">Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
+            </div>
+            <div class="actions">
+              <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">Approve</button>
+              <button class="btn-sm revoke" onclick="respondRequest(<%= req.id %>, 'rejected')">Reject</button>
+            </div>
+          </div>
+        <% }) %>
+      <% } %>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#8b949e;font-size:12px;margin-top:20px;border-top:1px solid #21262d;padding-top:15px">
+    Wantmatures Auto Clicker v5.9.0 • Code Activation System
+  </div>
+</div>
+
+<script>
+// ============================================
+// TAB SWITCHING
+// ============================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+  });
+});
+
+// ============================================
+// API FUNCTIONS
+// ============================================
+async function apiRequest(url, method = 'GET', data = null) {
+  const options = { method, headers: { 'Content-Type': 'application/json' } };
+  if (data) options.body = JSON.stringify(data);
+  const res = await fetch(url, options);
+  return res.json();
+}
+
+function showToast(message, type = 'info') {
+  // Simple alert for now - can be improved
+  alert(message);
+}
+
+// Generate Code
+async function generateCode() {
+  const maxDevices = parseInt(document.getElementById('max-devices').value) || 10;
+  try {
+    const result = await apiRequest('/api/generate-code', 'POST', { maxDevices });
+    if (result.success) {
+      document.getElementById('generated-code').textContent = '✅ ' + result.code;
+      showToast('Code generated: ' + result.code, 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Deactivate Code
+async function deactivateCode(code) {
+  if (!confirm('Deactivate code ' + code + '?')) return;
+  try {
+    const result = await apiRequest('/api/code/' + code + '/deactivate', 'POST');
+    if (result.success) {
+      showToast('Code deactivated', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Extend Code
+async function extendCode(code) {
+  const newMax = prompt('Enter new max devices for code ' + code + ':', '20');
+  if (newMax === null) return;
+  const maxDevices = parseInt(newMax);
+  if (isNaN(maxDevices) || maxDevices < 1) {
+    showToast('Invalid number', 'error');
+    return;
+  }
+  try {
+    const result = await apiRequest('/api/code/' + code + '/extend', 'POST', { maxDevices });
+    if (result.success) {
+      showToast('Code extended to ' + maxDevices + ' devices', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Approve Device
+async function approveDevice(deviceId) {
+  if (!confirm('Approve device ' + deviceId.substring(0,16) + '...?')) return;
+  try {
+    const result = await apiRequest('/api/approve/' + deviceId, 'POST');
+    if (result.success) {
+      showToast('Device approved', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Revoke Device
+async function revokeDevice(deviceId) {
+  if (!confirm('Revoke device ' + deviceId.substring(0,16) + '...?')) return;
+  try {
+    const result = await apiRequest('/api/revoke/' + deviceId, 'POST');
+    if (result.success) {
+      showToast('Device revoked', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Delete Device
+async function deleteDevice(deviceId) {
+  if (!confirm('Delete device ' + deviceId.substring(0,16) + '...?')) return;
+  try {
+    const result = await apiRequest('/api/device/' + deviceId, 'DELETE');
+    if (result.success) {
+      showToast('Device deleted', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Respond to Request
+async function respondRequest(requestId, status) {
+  const action = status === 'approved' ? 'Approve' : 'Reject';
+  if (!confirm(action + ' this request?')) return;
+  
+  const response = prompt('Admin response (optional):');
+  try {
+    const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
+      status, 
+      response: response || '' 
+    });
+    if (result.success) {
+      showToast('Request ' + status, 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+</script>
 </body>
 </html>

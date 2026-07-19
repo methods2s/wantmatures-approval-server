@@ -42,12 +42,9 @@ app.use(cors({
 }));
 app.use(express.static('public'));
 
-// ============================================
-// FIX: Increased rate limit
-// ============================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200, // Increased from 100 to 200
+  max: 200,
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -113,10 +110,15 @@ app.get('/logout', (req, res) => {
 app.get('/dashboard', isAuthenticated, async (req, res) => {
   const devices = await db.getDevices();
   const stats = await db.getStats();
+  const codes = await db.getAllCodes();
+  const requests = await db.getPendingRequests();
+  
   res.render('dashboard', { 
     username: req.session.username,
     devices: devices,
-    stats: stats
+    stats: stats,
+    codes: codes,
+    requests: requests
   });
 });
 
@@ -128,27 +130,44 @@ app.get('/', (req, res) => {
 // API ROUTES
 // ============================================
 
+// ---------- REGISTRATION WITH CODE ----------
+
 app.post('/api/register', async (req, res) => {
-  const { deviceId, userAgent, browserInfo } = req.body;
+  const { deviceId, userAgent, browserInfo, code } = req.body;
   
   if (!deviceId) {
     return res.status(400).json({ error: 'Device ID is required' });
   }
 
+  if (!code) {
+    return res.status(400).json({ error: 'Activation code is required' });
+  }
+
   const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
   
   try {
-    const device = await db.registerDevice(deviceId, userAgent || '', ip, browserInfo || '');
+    const result = await db.registerDeviceWithCode(deviceId, userAgent || '', ip, browserInfo || '', code.toUpperCase());
+    
+    if (!result.success) {
+      return res.status(400).json({ 
+        error: result.error,
+        status: 'registration_failed'
+      });
+    }
+
     res.json({
       success: true,
-      status: device.status,
-      message: `Device registered successfully`
+      status: result.status,
+      code: result.code,
+      message: `Device registered with code`
     });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
+
+// ---------- STATUS CHECK ----------
 
 app.get('/api/status/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
@@ -169,6 +188,7 @@ app.get('/api/status/:deviceId', async (req, res) => {
     res.json({
       exists: true,
       status: result.status,
+      code: result.code,
       device: result.device
     });
   } catch (error) {
@@ -176,6 +196,86 @@ app.get('/api/status/:deviceId', async (req, res) => {
     res.status(500).json({ error: 'Failed to check status' });
   }
 });
+
+// ---------- CODE MANAGEMENT (Admin) ----------
+
+app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
+  const { maxDevices = 10, notes = '' } = req.body;
+  
+  try {
+    const code = await db.generateCode(maxDevices, req.session.username, notes);
+    res.json({ 
+      success: true, 
+      code: code,
+      maxDevices: maxDevices,
+      message: `Code generated successfully`
+    });
+  } catch (error) {
+    console.error('Generate code error:', error);
+    res.status(500).json({ error: 'Failed to generate code' });
+  }
+});
+
+app.get('/api/codes', isApiAuthenticated, async (req, res) => {
+  try {
+    const codes = await db.getAllCodes();
+    res.json(codes);
+  } catch (error) {
+    console.error('Get codes error:', error);
+    res.status(500).json({ error: 'Failed to get codes' });
+  }
+});
+
+app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    const usage = await db.getCodeUsage(code);
+    res.json(usage);
+  } catch (error) {
+    console.error('Code usage error:', error);
+    res.status(500).json({ error: 'Failed to get code usage' });
+  }
+});
+
+app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    const success = await db.deactivateCode(code);
+    if (success) {
+      res.json({ success: true, message: `Code deactivated` });
+    } else {
+      res.status(404).json({ error: 'Code not found' });
+    }
+  } catch (error) {
+    console.error('Deactivate code error:', error);
+    res.status(500).json({ error: 'Failed to deactivate code' });
+  }
+});
+
+app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  const { maxDevices } = req.body;
+  
+  if (!maxDevices || maxDevices < 1) {
+    return res.status(400).json({ error: 'maxDevices is required and must be > 0' });
+  }
+  
+  try {
+    const success = await db.extendCode(code, maxDevices);
+    if (success) {
+      res.json({ success: true, message: `Code extended to ${maxDevices} devices` });
+    } else {
+      res.status(404).json({ error: 'Code not found' });
+    }
+  } catch (error) {
+    console.error('Extend code error:', error);
+    res.status(500).json({ error: 'Failed to extend code' });
+  }
+});
+
+// ---------- DEVICE MANAGEMENT (Admin) ----------
 
 app.post('/api/approve/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
@@ -225,26 +325,81 @@ app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   }
 });
 
-app.post('/api/revoke-all', isApiAuthenticated, async (req, res) => {
+// ---------- REQUEST MANAGEMENT ----------
+
+app.post('/api/request', async (req, res) => {
+  const { deviceId, code, reason } = req.body;
+  
+  if (!deviceId) {
+    return res.status(400).json({ error: 'Device ID is required' });
+  }
+  
   try {
-    const devices = await db.getApprovedDevices();
-    let revoked = 0;
-    
-    for (const device of devices) {
-      const success = await db.revokeDevice(device.device_id);
-      if (success) revoked++;
+    const result = await db.createRequest(deviceId, code || null, reason || '');
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        requestId: result.id,
+        message: 'Request submitted successfully'
+      });
+    } else {
+      res.status(400).json({ error: result.error });
     }
-    
-    res.json({ 
-      success: true, 
-      message: `Revoked ${revoked} devices`,
-      total: devices.length 
-    });
   } catch (error) {
-    console.error('Revoke all error:', error);
-    res.status(500).json({ error: 'Failed to revoke all devices' });
+    console.error('Request error:', error);
+    res.status(500).json({ error: 'Failed to submit request' });
   }
 });
+
+app.get('/api/requests', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.getAllRequests();
+    res.json(requests);
+  } catch (error) {
+    console.error('Get requests error:', error);
+    res.status(500).json({ error: 'Failed to get requests' });
+  }
+});
+
+app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.getPendingRequests();
+    res.json(requests);
+  } catch (error) {
+    console.error('Get pending requests error:', error);
+    res.status(500).json({ error: 'Failed to get pending requests' });
+  }
+});
+
+app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res) => {
+  const { requestId } = req.params;
+  const { status, response } = req.body;
+  
+  if (!status || !['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be "approved" or "rejected"' });
+  }
+  
+  try {
+    const success = await db.respondToRequest(requestId, status, response || '');
+    if (success) {
+      // If approved, also approve the device
+      if (status === 'approved') {
+        const request = await db.get(`SELECT device_id FROM requests WHERE id = ?`, [requestId]);
+        if (request) {
+          await db.approveDevice(request.device_id);
+        }
+      }
+      res.json({ success: true, message: `Request ${status}` });
+    } else {
+      res.status(404).json({ error: 'Request not found' });
+    }
+  } catch (error) {
+    console.error('Respond to request error:', error);
+    res.status(500).json({ error: 'Failed to respond to request' });
+  }
+});
+
+// ---------- STATS & LOGS ----------
 
 app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   try {
@@ -271,10 +426,14 @@ app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
   try {
     const devices = await db.getDevices();
     const stats = await db.getStats();
+    const codes = await db.getAllCodes();
+    const requests = await db.getPendingRequests();
     
     res.json({
       stats,
       devices,
+      codes,
+      requests,
       username: req.session.username
     });
   } catch (error) {
