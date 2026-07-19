@@ -28,12 +28,17 @@
     .section h2 .badge{background:#1f6feb;color:#fff;font-size:11px;padding:2px 10px;border-radius:12px;margin-left:8px}
     .section h2 .badge.orange{background:#d29922}
     .section h2 .badge.red{background:#da3633}
-    .code-gen{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:15px}
-    .code-gen label{color:#8b949e;font-size:13px}
-    .code-gen input{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;color:#f0f6fc;width:80px}
-    .code-gen button{background:#238636;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:bold}
-    .code-gen button:hover{background:#2ea043}
-    .code-gen .generated-code{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 16px;font-family:monospace;font-size:18px;color:#58a6ff;letter-spacing:2px}
+    .code-gen{background:#0d1117;padding:15px;border-radius:8px;border:1px solid #30363d;margin-bottom:15px}
+    .code-gen h3{color:#f0f6fc;font-size:14px;margin-bottom:10px}
+    .code-gen .gen-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+    .code-gen .gen-field{flex:1;min-width:150px}
+    .code-gen .gen-field label{color:#8b949e;font-size:12px;display:block;margin-bottom:4px}
+    .code-gen .gen-field input{width:100%;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#f0f6fc;font-size:13px}
+    .code-gen .gen-field input:focus{outline:none;border-color:#58a6ff}
+    .code-gen .gen-btn{padding:8px 24px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px}
+    .code-gen .gen-btn:hover{background:#2ea043}
+    .code-gen .gen-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .code-gen .gen-result{margin-top:10px;font-size:13px;font-family:monospace;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:4px;min-height:30px}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th{text-align:left;padding:10px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:600}
     td{padding:10px 12px;border-bottom:1px solid #21262d;vertical-align:middle}
@@ -53,22 +58,26 @@
     .btn-sm.remove:hover{background:#6e7681}
     .btn-sm.reactivate{background:#1f6feb;border-color:#1f6feb;color:#fff}
     .btn-sm.reactivate:hover{background:#388bfd}
+    .btn-sm.extend{background:#1f6feb;border-color:#1f6feb;color:#fff}
+    .btn-sm.extend:hover{background:#388bfd}
     .empty{color:#8b949e;text-align:center;padding:20px}
     .request-item{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .request-item .info{flex:1}
     .request-item .info .device{font-weight:bold;color:#f0f6fc}
     .request-item .info .code{color:#58a6ff;font-family:monospace}
     .request-item .info .reason{color:#8b949e;font-size:12px;margin-top:2px}
+    .request-item .info .time{font-size:10px;color:#8b949e;margin-top:2px}
     .request-item .actions{display:flex;gap:6px}
     .tabs{display:flex;gap:4px;margin-bottom:15px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-    .tab{padding:8px 16px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent}
+    .tab{padding:8px 16px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent;font-size:13px}
     .tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
     .tab:hover{color:#f0f6fc}
     .tab-content{display:none}
     .tab-content.active{display:block}
     .limit-full{color:#d29922;font-size:11px;font-weight:bold}
     .auto-approve-badge{background:#23863633;color:#3fb950;padding:2px 10px;border-radius:12px;font-size:10px;display:inline-block}
-    @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen{flex-direction:column;align-items:stretch}.code-gen input{width:100%}table{font-size:11px}td,th{padding:6px 8px}}
+    .code-display{font-family:monospace;font-size:18px;color:#58a6ff;letter-spacing:2px}
+    @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen .gen-row{flex-direction:column;align-items:stretch}.code-gen .gen-field{min-width:auto}table{font-size:11px}td,th{padding:6px 8px}}
   </style>
 </head>
 <body>
@@ -95,13 +104,13 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <div class="tab active" data-tab="devices">Devices</div>
-    <div class="tab" data-tab="codes">Codes</div>
-    <div class="tab" data-tab="requests">Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
-    <div class="tab" data-tab="coderequests">Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
+    <div class="tab active" data-tab="devices">📱 Devices</div>
+    <div class="tab" data-tab="codes">🔑 Codes <% if (stats.totalCodes > 0) { %><span class="badge"><%= stats.totalCodes %></span><% } %></div>
+    <div class="tab" data-tab="requests">📨 Slot Requests <% if (stats.pendingRequests > 0) { %><span class="badge orange"><%= stats.pendingRequests %></span><% } %></div>
+    <div class="tab" data-tab="coderequests">📨 Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
   </div>
 
-  <!-- Tab: Devices -->
+  <!-- ==================== TAB: DEVICES ==================== -->
   <div id="tab-devices" class="tab-content active">
     <div class="section">
       <h2>📱 Devices <span class="badge"><%= devices.length %></span></h2>
@@ -124,7 +133,7 @@
             <tbody>
               <% devices.forEach(device => { %>
                 <tr>
-                  <td style="font-family:monospace;font-size:11px"><%= device.device_id.substring(0,20) %>…</td>
+                  <td style="font-family:monospace;font-size:11px"><%= device.device_id ? device.device_id.substring(0,20) + '…' : 'Unknown' %></td>
                   <td style="font-family:monospace;color:#58a6ff"><%= device.code || '—' %></td>
                   <td><span class="status-badge <%= device.status %>"><%= device.status %></span></td>
                   <td><%= device.ping_count || 0 %></td>
@@ -144,17 +153,27 @@
     </div>
   </div>
 
-  <!-- Tab: Codes -->
+  <!-- ==================== TAB: CODES ==================== -->
   <div id="tab-codes" class="tab-content">
     <div class="section">
       <h2>🔑 Activation Codes <span class="badge"><%= codes.length %></span></h2>
       <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Users enter these codes and are auto-approved instantly.</p>
       
+      <!-- SIMPLIFIED CODE GENERATION -->
       <div class="code-gen">
-        <label>Max Devices:</label>
-        <input type="number" id="max-devices" value="10" min="1">
-        <button onclick="generateCode()">Generate Code</button>
-        <span id="generated-code" class="generated-code"></span>
+        <h3>🚀 Generate New Code</h3>
+        <div class="gen-row">
+          <div class="gen-field">
+            <label>👤 Username</label>
+            <input type="text" id="gen-username" placeholder="Enter username" autocomplete="off">
+          </div>
+          <div class="gen-field" style="min-width:120px;flex:0.5;">
+            <label>📊 Max Devices</label>
+            <input type="number" id="gen-max-devices" value="10" min="1" max="100">
+          </div>
+          <button class="gen-btn" id="gen-btn" onclick="generateCodeSimple()">🚀 Generate</button>
+        </div>
+        <div class="gen-result" id="gen-result">Enter a username and click Generate</div>
       </div>
 
       <% if (codes.length === 0) { %>
@@ -180,14 +199,14 @@
               %>
                 <tr>
                   <td style="font-family:monospace;font-size:16px;color:#58a6ff;letter-spacing:1px"><%= code.code %></td>
-                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span class="limit-full">🔴 FULL - Request more</span><% } %></td>
+                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span class="limit-full">🔴 FULL</span><% } %></td>
                   <td><span class="status-badge <%= code.is_active ? 'approved' : 'revoked' %>"><%= code.is_active ? 'Active' : 'Inactive' %></span></td>
                   <td style="font-size:11px"><%= new Date(code.created_at).toLocaleDateString() %></td>
                   <td style="font-size:11px;color:#8b949e"><%= code.notes || '—' %></td>
                   <td>
                     <% if (code.is_active) { %>
                       <button class="btn-sm revoke" onclick="deactivateCode('<%= code.code %>')">Deactivate</button>
-                      <button class="btn-sm" onclick="extendCode('<%= code.code %>')">Extend</button>
+                      <button class="btn-sm extend" onclick="extendCode('<%= code.code %>')">Extend</button>
                     <% } %>
                   </td>
                 </tr>
@@ -199,7 +218,7 @@
     </div>
   </div>
 
-  <!-- Tab: Requests (More Slots) -->
+  <!-- ==================== TAB: SLOT REQUESTS ==================== -->
   <div id="tab-requests" class="tab-content">
     <div class="section">
       <h2>📨 Slot Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
@@ -214,10 +233,10 @@
         <% pendingRequests.forEach(req => { %>
           <div class="request-item">
             <div class="info">
-              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id.substring(0,20) %>…</span></div>
+              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
               <div class="code">🔑 Code: <span style="font-family:monospace"><%= req.code || 'No code' %></span></div>
               <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
-              <div style="font-size:10px;color:#8b949e">Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
+              <div class="time">📅 Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
             </div>
             <div class="actions">
               <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">✅ Approve & Extend</button>
@@ -229,7 +248,7 @@
     </div>
   </div>
 
-  <!-- Tab: Code Requests -->
+  <!-- ==================== TAB: CODE REQUESTS ==================== -->
   <div id="tab-coderequests" class="tab-content">
     <div class="section">
       <h2>📨 Code Requests <span class="badge orange"><%= codeRequests ? codeRequests.length : 0 %></span></h2>
@@ -243,10 +262,10 @@
             <div class="info">
               <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
               <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
-              <div style="font-size:10px;color:#8b949e">Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
+              <div class="time">📅 Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
             </div>
             <div class="actions">
-              <button class="btn-sm approve" onclick="generateCodeForUser('<%= req.id %>')">Generate Code</button>
+              <button class="btn-sm approve" onclick="generateCodeForUser('<%= req.id %>', '<%= req.device_id %>')">🎯 Generate Code</button>
               <button class="btn-sm revoke" onclick="rejectRequest('<%= req.id %>')">Reject</button>
             </div>
           </div>
@@ -274,10 +293,13 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 
 // ============================================
-// API FUNCTIONS
+// API REQUEST HELPER
 // ============================================
 async function apiRequest(url, method = 'GET', data = null) {
-  const options = { method, headers: { 'Content-Type': 'application/json' } };
+  const options = { 
+    method, 
+    headers: { 'Content-Type': 'application/json' } 
+  };
   if (data) options.body = JSON.stringify(data);
   const res = await fetch(url, options);
   return res.json();
@@ -287,40 +309,88 @@ function showToast(message, type = 'info') {
   alert(message);
 }
 
-// Generate Code
-async function generateCode() {
-  const maxDevices = parseInt(document.getElementById('max-devices').value) || 10;
+// ============================================
+// SIMPLIFIED: GENERATE CODE (Just username + device limit)
+// ============================================
+async function generateCodeSimple() {
+  const username = document.getElementById('gen-username').value.trim();
+  const maxDevices = parseInt(document.getElementById('gen-max-devices').value) || 10;
+  const resultDiv = document.getElementById('gen-result');
+  const genBtn = document.getElementById('gen-btn');
+  
+  if (!username) {
+    resultDiv.innerHTML = '⚠️ Please enter a username';
+    resultDiv.style.color = '#f85149';
+    return;
+  }
+  
+  if (maxDevices < 1) {
+    resultDiv.innerHTML = '⚠️ Max devices must be at least 1';
+    resultDiv.style.color = '#f85149';
+    return;
+  }
+  
+  resultDiv.innerHTML = '⏳ Generating code...';
+  resultDiv.style.color = '#d29922';
+  genBtn.disabled = true;
+  genBtn.textContent = '⏳...';
+  
   try {
-    const result = await apiRequest('/api/generate-code', 'POST', { maxDevices });
+    const result = await apiRequest('/api/generate-code', 'POST', { 
+      username: username,
+      maxDevices: maxDevices
+    });
+    
     if (result.success) {
-      document.getElementById('generated-code').textContent = '✅ ' + result.code;
-      showToast('Code generated: ' + result.code + ' (max ' + maxDevices + ' devices)', 'success');
-      setTimeout(() => location.reload(), 1500);
+      resultDiv.innerHTML = '✅ Code: <strong style="font-size:18px;color:#58a6ff;">' + result.code + '</strong> for <strong>' + result.username + '</strong> (max ' + result.maxDevices + ' devices)';
+      resultDiv.style.color = '#3fb950';
+      showToast('✅ Code generated: ' + result.code + ' for ' + username, 'success');
+      document.getElementById('gen-username').value = '';
+      setTimeout(() => location.reload(), 2000);
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      resultDiv.innerHTML = '❌ ' + (result.error || 'Failed to generate code');
+      resultDiv.style.color = '#f85149';
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    resultDiv.innerHTML = '❌ Error: ' + e.message;
+    resultDiv.style.color = '#f85149';
+    showToast('❌ Error: ' + e.message, 'error');
   }
+  
+  genBtn.disabled = false;
+  genBtn.textContent = '🚀 Generate';
 }
 
-// Deactivate Code
+// Enter key support for generate
+document.getElementById('gen-username').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') generateCodeSimple();
+});
+document.getElementById('gen-max-devices').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') generateCodeSimple();
+});
+
+// ============================================
+// DEACTIVATE CODE
+// ============================================
 async function deactivateCode(code) {
   if (!confirm('Deactivate code ' + code + '? Users with this code will lose access.')) return;
   try {
     const result = await apiRequest('/api/code/' + code + '/deactivate', 'POST');
     if (result.success) {
-      showToast('Code deactivated', 'success');
+      showToast('✅ Code deactivated', 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Extend Code
+// ============================================
+// EXTEND CODE
+// ============================================
 async function extendCode(code) {
   const newMax = prompt('Enter new max devices for code ' + code + ':', '20');
   if (newMax === null) return;
@@ -332,49 +402,55 @@ async function extendCode(code) {
   try {
     const result = await apiRequest('/api/code/' + code + '/extend', 'POST', { maxDevices });
     if (result.success) {
-      showToast('Code extended to ' + maxDevices + ' devices', 'success');
+      showToast('✅ Code extended to ' + maxDevices + ' devices', 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Remove User
+// ============================================
+// REMOVE USER
+// ============================================
 async function removeUser(deviceId) {
   if (!confirm('🗑️ Remove this user? This will FREE UP a slot and the device will need to re-enter the code.')) return;
   try {
     const result = await apiRequest('/api/device/' + deviceId, 'DELETE');
     if (result.success) {
-      showToast('✅ User removed! Slot freed. Device must re-enter code.', 'success');
+      showToast('✅ User removed! Slot freed.', 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Reactivate Device
+// ============================================
+// REACTIVATE DEVICE
+// ============================================
 async function reactivateDevice(deviceId) {
   if (!confirm('Reactivate this device?')) return;
   try {
     const result = await apiRequest('/api/reactivate/' + deviceId, 'POST');
     if (result.success) {
-      showToast('Device reactivated', 'success');
+      showToast('✅ Device reactivated', 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Respond to Request (More Slots)
+// ============================================
+// RESPOND TO SLOT REQUEST
+// ============================================
 async function respondRequest(requestId, status) {
   const action = status === 'approved' ? 'Approve' : 'Reject';
   if (!confirm(action + ' this request? ' + (status === 'approved' ? 'This will auto-extend the code limit!' : ''))) return;
@@ -386,61 +462,66 @@ async function respondRequest(requestId, status) {
       response: response || '' 
     });
     if (result.success) {
-      showToast('Request ' + status + (status === 'approved' ? ' - Code extended!' : ''), 'success');
+      showToast('✅ Request ' + status + (status === 'approved' ? ' - Code extended!' : ''), 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Generate Code for User
-async function generateCodeForUser(requestId) {
-  const email = prompt('Enter the user\'s email address:');
-  if (email === null) return;
-  if (!email || !email.includes('@')) {
-    showToast('Invalid email address', 'error');
+// ============================================
+// GENERATE CODE FOR USER (from code request)
+// ============================================
+async function generateCodeForUser(requestId, deviceId) {
+  const username = prompt('Enter username for this code:', 'user_' + (deviceId ? deviceId.substring(0,8) : ''));
+  if (username === null) return;
+  if (!username || username.trim() === '') {
+    showToast('Username is required', 'error');
     return;
   }
   
   const maxDevices = parseInt(prompt('Max devices for this code:', '10')) || 10;
   
-  if (!confirm(`Generate code for ${email} with ${maxDevices} device limit?`)) return;
+  if (!confirm(`Generate code for "${username}" with ${maxDevices} device limit?`)) return;
   
   try {
-    const result = await apiRequest('/api/generate-code-for-user', 'POST', { 
-      email, 
-      maxDevices 
+    const result = await apiRequest('/api/generate-code', 'POST', { 
+      username: username.trim(),
+      maxDevices: maxDevices
     });
+    
     if (result.success) {
-      showToast('✅ Code generated: ' + result.code + ' for ' + email, 'success');
+      showToast('✅ Code generated: ' + result.code + ' for ' + result.username, 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 
-// Reject Request
+// ============================================
+// REJECT REQUEST
+// ============================================
 async function rejectRequest(requestId) {
   if (!confirm('Reject this request?')) return;
   try {
     const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
       status: 'rejected',
-      response: 'Request rejected'
+      response: 'Request rejected by admin'
     });
     if (result.success) {
-      showToast('Request rejected', 'success');
+      showToast('✅ Request rejected', 'success');
       location.reload();
     } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
     }
   } catch (e) {
-    showToast('Error: ' + e.message, 'error');
+    showToast('❌ Error: ' + e.message, 'error');
   }
 }
 </script>
