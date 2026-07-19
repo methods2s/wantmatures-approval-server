@@ -10,14 +10,7 @@ const db = require('./database');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================
-// FIX: Trust proxy for Render
-// ============================================
 app.set('trust proxy', 1);
-
-// ============================================
-// SESSION CONFIGURATION
-// ============================================
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret-change-me',
@@ -29,10 +22,6 @@ app.use(session({
     sameSite: 'lax'
   }
 }));
-
-// ============================================
-// MIDDLEWARE
-// ============================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -53,10 +42,6 @@ app.use('/api/', limiter);
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
-// ============================================
-// AUTHENTICATION MIDDLEWARE
-// ============================================
 
 function isAuthenticated(req, res, next) {
   if (req.session && req.session.isAuthenticated) {
@@ -130,7 +115,7 @@ app.get('/', (req, res) => {
 // API ROUTES
 // ============================================
 
-// ---------- REGISTRATION WITH CODE ----------
+// ---------- REGISTRATION WITH AUTO-APPROVAL ----------
 
 app.post('/api/register', async (req, res) => {
   const { deviceId, userAgent, browserInfo, code } = req.body;
@@ -151,15 +136,16 @@ app.post('/api/register', async (req, res) => {
     if (!result.success) {
       return res.status(400).json({ 
         error: result.error,
-        status: 'registration_failed'
+        status: 'registration_failed',
+        limitReached: result.limitReached || false
       });
     }
 
     res.json({
       success: true,
-      status: result.status,
+      status: result.status, // Always 'approved' now
       code: result.code,
-      message: `Device registered with code`
+      message: `Device registered and auto-approved!`
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -179,7 +165,7 @@ app.get('/api/status/:deviceId', async (req, res) => {
       return res.status(404).json({ 
         exists: false, 
         status: 'not_found',
-        message: 'Device not found' 
+        message: 'Device not found - Enter code again' 
       });
     }
 
@@ -277,29 +263,34 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
 
 // ---------- DEVICE MANAGEMENT (Admin) ----------
 
-app.post('/api/approve/:deviceId', isApiAuthenticated, async (req, res) => {
+// REMOVE USER - frees up slot, device needs to re-enter code
+app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
   try {
-    const success = await db.approveDevice(deviceId);
+    const success = await db.removeUser(deviceId);
     if (success) {
-      res.json({ success: true, message: `Device approved` });
+      res.json({ 
+        success: true, 
+        message: `User removed, slot freed. Device will need to re-enter code.` 
+      });
     } else {
       res.status(404).json({ error: 'Device not found' });
     }
   } catch (error) {
-    console.error('Approval error:', error);
-    res.status(500).json({ error: 'Failed to approve device' });
+    console.error('Remove user error:', error);
+    res.status(500).json({ error: 'Failed to remove user' });
   }
 });
 
+// Revoke device (alternative to remove)
 app.post('/api/revoke/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
   try {
     const success = await db.revokeDevice(deviceId);
     if (success) {
-      res.json({ success: true, message: `Device revoked` });
+      res.json({ success: true, message: `Device revoked, slot freed` });
     } else {
       res.status(404).json({ error: 'Device not found' });
     }
@@ -309,19 +300,22 @@ app.post('/api/revoke/:deviceId', isApiAuthenticated, async (req, res) => {
   }
 });
 
-app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
+// Reactivate device
+app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
   try {
-    const success = await db.deleteDevice(deviceId);
-    if (success) {
-      res.json({ success: true, message: `Device deleted` });
+    const result = await db.reactivateDevice(deviceId);
+    if (result && result.success !== false) {
+      res.json({ success: true, message: `Device reactivated` });
+    } else if (result && result.error) {
+      res.status(400).json({ error: result.error });
     } else {
       res.status(404).json({ error: 'Device not found' });
     }
   } catch (error) {
-    console.error('Delete error:', error);
-    res.status(500).json({ error: 'Failed to delete device' });
+    console.error('Reactivate error:', error);
+    res.status(500).json({ error: 'Failed to reactivate device' });
   }
 });
 
@@ -382,13 +376,6 @@ app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res)
   try {
     const success = await db.respondToRequest(requestId, status, response || '');
     if (success) {
-      // If approved, also approve the device
-      if (status === 'approved') {
-        const request = await db.get(`SELECT device_id FROM requests WHERE id = ?`, [requestId]);
-        if (request) {
-          await db.approveDevice(request.device_id);
-        }
-      }
       res.json({ success: true, message: `Request ${status}` });
     } else {
       res.status(404).json({ error: 'Request not found' });

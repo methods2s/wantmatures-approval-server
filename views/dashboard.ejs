@@ -49,8 +49,10 @@
     .btn-sm.approve:hover{background:#2ea043}
     .btn-sm.revoke{background:#da3633;border-color:#da3633;color:#fff}
     .btn-sm.revoke:hover{background:#f85149}
-    .btn-sm.delete{background:#8b949e;border-color:#8b949e;color:#fff}
-    .btn-sm.delete:hover{background:#6e7681}
+    .btn-sm.remove{background:#8b949e;border-color:#8b949e;color:#fff}
+    .btn-sm.remove:hover{background:#6e7681}
+    .btn-sm.reactivate{background:#1f6feb;border-color:#1f6feb;color:#fff}
+    .btn-sm.reactivate:hover{background:#388bfd}
     .empty{color:#8b949e;text-align:center;padding:20px}
     .request-item{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .request-item .info{flex:1}
@@ -58,19 +60,21 @@
     .request-item .info .code{color:#58a6ff;font-family:monospace}
     .request-item .info .reason{color:#8b949e;font-size:12px;margin-top:2px}
     .request-item .actions{display:flex;gap:6px}
-    .tabs{display:flex;gap:4px;margin-bottom:15px;border-bottom:1px solid #30363d}
+    .tabs{display:flex;gap:4px;margin-bottom:15px;border-bottom:1px solid #30363d;flex-wrap:wrap}
     .tab{padding:8px 16px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent}
     .tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
     .tab:hover{color:#f0f6fc}
     .tab-content{display:none}
     .tab-content.active{display:block}
+    .limit-full{color:#d29922;font-size:11px;font-weight:bold}
+    .auto-approve-badge{background:#23863633;color:#3fb950;padding:2px 10px;border-radius:12px;font-size:10px;display:inline-block}
     @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen{flex-direction:column;align-items:stretch}.code-gen input{width:100%}table{font-size:11px}td,th{padding:6px 8px}}
   </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>🔐 Approval Dashboard</h1>
+    <h1>🔐 Approval Dashboard <span class="auto-approve-badge">⚡ AUTO-APPROVE</span></h1>
     <div>
       <span class="user">👤 <span><%= username %></span></span>
       <form action="/logout" method="GET" style="display:inline">
@@ -82,10 +86,10 @@
   <!-- Stats -->
   <div class="stats">
     <div class="stat-card"><div class="number"><%= stats.total %></div><div class="label">Total Devices</div></div>
-    <div class="stat-card"><div class="number orange"><%= stats.pending %></div><div class="label">Pending Approval</div></div>
-    <div class="stat-card"><div class="number green"><%= stats.approved %></div><div class="label">Approved</div></div>
+    <div class="stat-card"><div class="number orange"><%= stats.pending %></div><div class="label">Pending</div></div>
+    <div class="stat-card"><div class="number green"><%= stats.approved %></div><div class="label">Auto-Approved</div></div>
     <div class="stat-card"><div class="number red"><%= stats.revoked %></div><div class="label">Revoked</div></div>
-    <div class="stat-card"><div class="number blue"><%= stats.totalCodes %></div><div class="label">Codes Generated</div></div>
+    <div class="stat-card"><div class="number blue"><%= stats.totalCodes %></div><div class="label">Codes</div></div>
     <div class="stat-card"><div class="number purple"><%= stats.pendingRequests %></div><div class="label">Pending Requests</div></div>
   </div>
 
@@ -100,6 +104,7 @@
   <div id="tab-devices" class="tab-content active">
     <div class="section">
       <h2>📱 Devices <span class="badge"><%= devices.length %></span></h2>
+      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Devices are auto-approved when they enter a valid code.</p>
       <% if (devices.length === 0) { %>
         <div class="empty">No devices registered yet.</div>
       <% } else { %>
@@ -124,13 +129,11 @@
                   <td><%= device.ping_count || 0 %></td>
                   <td style="font-size:11px"><%= new Date(device.created_at).toLocaleDateString() %></td>
                   <td>
-                    <% if (device.status === 'pending') { %>
-                      <button class="btn-sm approve" onclick="approveDevice('<%= device.device_id %>')">Approve</button>
+                    <!-- REMOVE USER - frees up slot, device needs to re-enter code -->
+                    <button class="btn-sm remove" onclick="removeUser('<%= device.device_id %>')">🗑️ Remove</button>
+                    <% if (device.status === 'revoked') { %>
+                      <button class="btn-sm reactivate" onclick="reactivateDevice('<%= device.device_id %>')">Reactivate</button>
                     <% } %>
-                    <% if (device.status === 'approved' || device.status === 'pending') { %>
-                      <button class="btn-sm revoke" onclick="revokeDevice('<%= device.device_id %>')">Revoke</button>
-                    <% } %>
-                    <button class="btn-sm delete" onclick="deleteDevice('<%= device.device_id %>')">Delete</button>
                   </td>
                 </tr>
               <% }) %>
@@ -145,6 +148,7 @@
   <div id="tab-codes" class="tab-content">
     <div class="section">
       <h2>🔑 Activation Codes <span class="badge"><%= codes.length %></span></h2>
+      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Users enter these codes and are auto-approved instantly.</p>
       
       <!-- Generate Code -->
       <div class="code-gen">
@@ -177,15 +181,15 @@
               %>
                 <tr>
                   <td style="font-family:monospace;font-size:16px;color:#58a6ff;letter-spacing:1px"><%= code.code %></td>
-                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span style="color:#d29922;font-size:11px">🔴 FULL</span><% } %></td>
+                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span class="limit-full">🔴 FULL - Request more</span><% } %></td>
                   <td><span class="status-badge <%= code.is_active ? 'approved' : 'revoked' %>"><%= code.is_active ? 'Active' : 'Inactive' %></span></td>
                   <td style="font-size:11px"><%= new Date(code.created_at).toLocaleDateString() %></td>
                   <td style="font-size:11px;color:#8b949e"><%= code.notes || '—' %></td>
                   <td>
                     <% if (code.is_active) { %>
                       <button class="btn-sm revoke" onclick="deactivateCode('<%= code.code %>')">Deactivate</button>
+                      <button class="btn-sm" onclick="extendCode('<%= code.code %>')">Extend</button>
                     <% } %>
-                    <button class="btn-sm" onclick="extendCode('<%= code.code %>')">Extend</button>
                   </td>
                 </tr>
               <% }) %>
@@ -200,6 +204,7 @@
   <div id="tab-requests" class="tab-content">
     <div class="section">
       <h2>📨 Slot Requests <span class="badge orange"><%= stats.pendingRequests %></span></h2>
+      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">Users request more slots when their code is full. Approving automatically extends the code limit.</p>
       <% 
         const pendingRequests = requests || [];
         const hasPending = pendingRequests.length > 0;
@@ -216,8 +221,8 @@
               <div style="font-size:10px;color:#8b949e">Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
             </div>
             <div class="actions">
-              <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">Approve</button>
-              <button class="btn-sm revoke" onclick="respondRequest(<%= req.id %>, 'rejected')">Reject</button>
+              <button class="btn-sm approve" onclick="respondRequest(<%= req.id %>, 'approved')">✅ Approve & Extend</button>
+              <button class="btn-sm revoke" onclick="respondRequest(<%= req.id %>, 'rejected')">❌ Reject</button>
             </div>
           </div>
         <% }) %>
@@ -226,7 +231,7 @@
   </div>
 
   <div style="text-align:center;color:#8b949e;font-size:12px;margin-top:20px;border-top:1px solid #21262d;padding-top:15px">
-    Wantmatures Auto Clicker v5.9.0 • Code Activation System
+    Wantmatures Auto Clicker v5.9.0 • Auto-Approval System • ⚡ Instant Activation
   </div>
 </div>
 
@@ -254,7 +259,6 @@ async function apiRequest(url, method = 'GET', data = null) {
 }
 
 function showToast(message, type = 'info') {
-  // Simple alert for now - can be improved
   alert(message);
 }
 
@@ -265,7 +269,7 @@ async function generateCode() {
     const result = await apiRequest('/api/generate-code', 'POST', { maxDevices });
     if (result.success) {
       document.getElementById('generated-code').textContent = '✅ ' + result.code;
-      showToast('Code generated: ' + result.code, 'success');
+      showToast('Code generated: ' + result.code + ' (max ' + maxDevices + ' devices)', 'success');
       setTimeout(() => location.reload(), 1500);
     } else {
       showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
@@ -277,7 +281,7 @@ async function generateCode() {
 
 // Deactivate Code
 async function deactivateCode(code) {
-  if (!confirm('Deactivate code ' + code + '?')) return;
+  if (!confirm('Deactivate code ' + code + '? Users with this code will lose access.')) return;
   try {
     const result = await apiRequest('/api/code/' + code + '/deactivate', 'POST');
     if (result.success) {
@@ -313,45 +317,13 @@ async function extendCode(code) {
   }
 }
 
-// Approve Device
-async function approveDevice(deviceId) {
-  if (!confirm('Approve device ' + deviceId.substring(0,16) + '...?')) return;
-  try {
-    const result = await apiRequest('/api/approve/' + deviceId, 'POST');
-    if (result.success) {
-      showToast('Device approved', 'success');
-      location.reload();
-    } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Revoke Device
-async function revokeDevice(deviceId) {
-  if (!confirm('Revoke device ' + deviceId.substring(0,16) + '...?')) return;
-  try {
-    const result = await apiRequest('/api/revoke/' + deviceId, 'POST');
-    if (result.success) {
-      showToast('Device revoked', 'success');
-      location.reload();
-    } else {
-      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// Delete Device
-async function deleteDevice(deviceId) {
-  if (!confirm('Delete device ' + deviceId.substring(0,16) + '...?')) return;
+// REMOVE USER - frees up slot, device needs to re-enter code
+async function removeUser(deviceId) {
+  if (!confirm('🗑️ Remove this user? This will FREE UP a slot and the device will need to re-enter the code.')) return;
   try {
     const result = await apiRequest('/api/device/' + deviceId, 'DELETE');
     if (result.success) {
-      showToast('Device deleted', 'success');
+      showToast('✅ User removed! Slot freed. Device must re-enter code.', 'success');
       location.reload();
     } else {
       showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
@@ -361,10 +333,26 @@ async function deleteDevice(deviceId) {
   }
 }
 
-// Respond to Request
+// Reactivate Device
+async function reactivateDevice(deviceId) {
+  if (!confirm('Reactivate this device?')) return;
+  try {
+    const result = await apiRequest('/api/reactivate/' + deviceId, 'POST');
+    if (result.success) {
+      showToast('Device reactivated', 'success');
+      location.reload();
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Respond to Request - AUTO-EXTENDS code when approved
 async function respondRequest(requestId, status) {
   const action = status === 'approved' ? 'Approve' : 'Reject';
-  if (!confirm(action + ' this request?')) return;
+  if (!confirm(action + ' this request? ' + (status === 'approved' ? 'This will auto-extend the code limit!' : ''))) return;
   
   const response = prompt('Admin response (optional):');
   try {
@@ -373,7 +361,7 @@ async function respondRequest(requestId, status) {
       response: response || '' 
     });
     if (result.success) {
-      showToast('Request ' + status, 'success');
+      showToast('Request ' + status + (status === 'approved' ? ' - Code extended!' : ''), 'success');
       location.reload();
     } else {
       showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
