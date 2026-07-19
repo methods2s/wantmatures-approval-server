@@ -306,6 +306,20 @@ app.get('/api/codes', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// ---------- GET CODE USAGE ----------
+
+app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    const usage = await db.getCodeUsage(code);
+    res.json(usage);
+  } catch (error) {
+    console.error('Code usage error:', error);
+    res.status(500).json({ error: 'Failed to get code usage' });
+  }
+});
+
 // ---------- DEACTIVATE CODE ----------
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
@@ -347,7 +361,7 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- REMOVE USER ----------
+// ---------- DELETE DEVICE (FULL REMOVE - For admin) ----------
 
 app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
@@ -478,7 +492,7 @@ app.post('/api/request', async (req, res) => {
   }
 });
 
-// ---------- GET REQUESTS ----------
+// ---------- GET ALL REQUESTS ----------
 
 app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   try {
@@ -490,6 +504,8 @@ app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// ---------- GET PENDING REQUESTS ----------
+
 app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.getPendingRequests();
@@ -500,10 +516,14 @@ app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// ---------- GET PENDING CODE REQUESTS ----------
+
 app.get('/api/requests/code', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.all(
-      `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
+      `SELECT * FROM requests 
+       WHERE code IS NULL AND status = 'pending'
+       ORDER BY requested_at DESC`
     );
     res.json(requests);
   } catch (error) {
@@ -535,7 +555,7 @@ app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res)
   }
 });
 
-// ---------- STATS ----------
+// ---------- GET STATS ----------
 
 app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   try {
@@ -547,7 +567,7 @@ app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- LOGS ----------
+// ---------- GET LOGS ----------
 
 app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   try {
@@ -560,7 +580,7 @@ app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- DASHBOARD DATA ----------
+// ---------- GET DASHBOARD DATA ----------
 
 app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
   try {
