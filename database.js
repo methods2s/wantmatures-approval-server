@@ -361,23 +361,27 @@ class DeviceDatabase {
     return await this.all(`SELECT * FROM devices WHERE code = ? ORDER BY created_at DESC`, [code]);
   }
 
+  // REMOVE USER - DELETES device completely, frees slot
   async removeUser(deviceId) {
     const device = await this.getDevice(deviceId);
     if (!device) return false;
 
+    const code = device.code;
+    
     const result = await this.run(
       `DELETE FROM devices WHERE device_id = ?`,
       [deviceId]
     );
     
     if (result.changes > 0) {
-      if (device.code) {
+      if (code) {
         await this.run(
           `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
-          [device.code]
+          [code]
         );
-        await this.logUsage(deviceId, device.code, 'remove_user', 'User removed, slot freed');
+        await this.logUsage(deviceId, code, 'remove_user', 'User removed, slot freed');
       }
+      console.log(`🗑️ User ${deviceId} removed, slot freed for code ${code}`);
       return true;
     }
     return false;

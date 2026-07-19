@@ -187,7 +187,40 @@ app.get('/api/status/:deviceId', async (req, res) => {
   }
 });
 
-// ---------- REQUEST CODE (No email needed) ----------
+// ---------- FORCE DEVICE STATUS CHECK ----------
+
+app.get('/api/device-status/:deviceId', async (req, res) => {
+  const { deviceId } = req.params;
+  
+  try {
+    const device = await db.getDevice(deviceId);
+    
+    if (!device) {
+      return res.json({ 
+        exists: false, 
+        status: 'not_found',
+        message: 'Device not found' 
+      });
+    }
+    
+    res.json({
+      exists: true,
+      status: device.status,
+      code: device.code,
+      device: {
+        id: device.device_id,
+        approved_at: device.approved_at,
+        revoked_at: device.revoked_at,
+        created_at: device.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Device status error:', error);
+    res.status(500).json({ error: 'Failed to check device status' });
+  }
+});
+
+// ---------- REQUEST CODE ----------
 
 app.post('/api/request-code', async (req, res) => {
   const { deviceId } = req.body;
@@ -195,7 +228,6 @@ app.post('/api/request-code', async (req, res) => {
   try {
     console.log(`📨 Code request from device: ${deviceId || 'unknown'}`);
     
-    // Check if device already has a pending request
     const existing = await db.get(
       `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
       [deviceId || 'unknown']
@@ -218,8 +250,7 @@ app.post('/api/request-code', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Code request submitted. Admin will review.',
-      requestId: existing ? existing.id : 'new'
+      message: 'Code request submitted. Admin will review.'
     });
     
   } catch (error) {
@@ -228,21 +259,18 @@ app.post('/api/request-code', async (req, res) => {
   }
 });
 
-// ---------- SIMPLIFIED: GENERATE CODE (Just ask for username and device limit) ----------
+// ---------- GENERATE CODE ----------
 
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   const { username, maxDevices = 10 } = req.body;
   
-  // Username is required
   if (!username || username.trim() === '') {
     return res.status(400).json({ error: 'Username is required' });
   }
   
   try {
-    // Generate the code
     const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
     
-    // Also update any pending request from this user if exists
     await db.run(
       `UPDATE requests 
        SET status = 'approved', 
@@ -275,20 +303,6 @@ app.get('/api/codes', isApiAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Get codes error:', error);
     res.status(500).json({ error: 'Failed to get codes' });
-  }
-});
-
-// ---------- GET CODE USAGE ----------
-
-app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
-  const { code } = req.params;
-  
-  try {
-    const usage = await db.getCodeUsage(code);
-    res.json(usage);
-  } catch (error) {
-    console.error('Code usage error:', error);
-    res.status(500).json({ error: 'Failed to get code usage' });
   }
 });
 
@@ -333,7 +347,7 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- REMOVE USER (Frees slot) ----------
+// ---------- REMOVE USER ----------
 
 app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
@@ -354,24 +368,6 @@ app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- REVOKE DEVICE ----------
-
-app.post('/api/revoke/:deviceId', isApiAuthenticated, async (req, res) => {
-  const { deviceId } = req.params;
-  
-  try {
-    const success = await db.revokeDevice(deviceId);
-    if (success) {
-      res.json({ success: true, message: `Device revoked, slot freed` });
-    } else {
-      res.status(404).json({ error: 'Device not found' });
-    }
-  } catch (error) {
-    console.error('Revoke error:', error);
-    res.status(500).json({ error: 'Failed to revoke device' });
-  }
-});
-
 // ---------- REACTIVATE DEVICE ----------
 
 app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
@@ -389,6 +385,70 @@ app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Reactivate error:', error);
     res.status(500).json({ error: 'Failed to reactivate device' });
+  }
+});
+
+// ---------- ASSIGN DEVICE TO CODE ----------
+
+app.post('/api/device/:deviceId/assign-code', isApiAuthenticated, async (req, res) => {
+  const { deviceId } = req.params;
+  const { code } = req.body;
+  
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  
+  try {
+    const codeInfo = await db.getCodeInfo(code);
+    if (!codeInfo) {
+      return res.status(404).json({ error: 'Code not found' });
+    }
+    
+    if (!codeInfo.is_active) {
+      return res.status(400).json({ error: 'Code is inactive' });
+    }
+    
+    const device = await db.getDevice(deviceId);
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+    
+    const usage = await db.getCodeUsage(code);
+    if (usage.used >= usage.max) {
+      return res.status(400).json({ error: 'Code limit reached' });
+    }
+    
+    if (device.code && device.code !== code) {
+      await db.run(
+        `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
+        [device.code]
+      );
+    }
+    
+    await db.run(
+      `UPDATE devices 
+       SET code = ?, 
+           status = 'approved',
+           approved_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE device_id = ?`,
+      [code, deviceId]
+    );
+    
+    await db.run(
+      `UPDATE codes SET used_count = used_count + 1 WHERE code = ?`,
+      [code]
+    );
+    
+    await db.logUsage(deviceId, code, 'assign_code', `Device assigned to code by admin`);
+    
+    res.json({ 
+      success: true, 
+      message: `Device assigned to code: ${code}` 
+    });
+  } catch (error) {
+    console.error('Assign device error:', error);
+    res.status(500).json({ error: 'Failed to assign device' });
   }
 });
 
@@ -418,7 +478,7 @@ app.post('/api/request', async (req, res) => {
   }
 });
 
-// ---------- GET ALL REQUESTS ----------
+// ---------- GET REQUESTS ----------
 
 app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   try {
@@ -430,8 +490,6 @@ app.get('/api/requests', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- GET PENDING REQUESTS ----------
-
 app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.getPendingRequests();
@@ -442,14 +500,10 @@ app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- GET PENDING CODE REQUESTS ----------
-
 app.get('/api/requests/code', isApiAuthenticated, async (req, res) => {
   try {
     const requests = await db.all(
-      `SELECT * FROM requests 
-       WHERE code IS NULL AND status = 'pending'
-       ORDER BY requested_at DESC`
+      `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
     );
     res.json(requests);
   } catch (error) {
@@ -481,7 +535,7 @@ app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res)
   }
 });
 
-// ---------- GET STATS ----------
+// ---------- STATS ----------
 
 app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   try {
@@ -493,7 +547,7 @@ app.get('/api/stats', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- GET LOGS ----------
+// ---------- LOGS ----------
 
 app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   try {
@@ -506,7 +560,7 @@ app.get('/api/logs', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- GET DASHBOARD DATA ----------
+// ---------- DASHBOARD DATA ----------
 
 app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
   try {
