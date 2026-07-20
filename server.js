@@ -240,18 +240,6 @@ app.post('/api/request-code', async (req, res) => {
       });
     }
     
-    // Check if device already has a request that was approved but no code was generated
-    const existingApproved = await db.get(
-      `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'approved'`,
-      [deviceId || 'unknown']
-    );
-    
-    if (existingApproved) {
-      return res.status(400).json({ 
-        error: 'Your previous request was approved but no code was generated. Please contact admin.' 
-      });
-    }
-    
     await db.run(
       `INSERT INTO requests (device_id, code, reason, status)
        VALUES (?, ?, ?, 'pending')`,
@@ -286,8 +274,7 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
     // Generate the code
     const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
     
-    // FIXED: Update the pending request to approved and mark it as responded
-    // Then remove it from pending list
+    // FIXED: Update the pending request to approved
     await db.run(
       `UPDATE requests 
        SET status = 'approved', 
@@ -350,7 +337,7 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DEACTIVATE CODE ----------
-// FIXED: Deactivates code, revokes all devices, removes from code list
+// FIXED: Deactivates code, revokes all devices, removes from active list
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
@@ -374,7 +361,7 @@ app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
       );
     }
     
-    // Reset used_count to 0
+    // Reset used_count to 0 and set inactive
     await db.run(
       `UPDATE codes SET used_count = 0, is_active = 0 WHERE code = ?`,
       [code]
@@ -466,39 +453,52 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   }
 });
 
-// ---------- DELETE DEVICE (FULL REMOVE - For admin) ----------
+// ---------- DELETE DEVICE (FULL REMOVE - Called by extension) ----------
+// FIXED: Properly removes device and updates admin dashboard
 
-app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
+app.delete('/api/device/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
+  
+  console.log(`🗑️ DELETE request for device: ${deviceId}`);
   
   try {
     const device = await db.getDevice(deviceId);
     if (!device) {
+      console.log(`❌ Device not found: ${deviceId}`);
       return res.status(404).json({ error: 'Device not found' });
     }
     
     const code = device.code;
+    console.log(`📋 Device found with code: ${code}`);
     
     // Delete the device
-    const success = await db.removeUser(deviceId);
-    if (success) {
+    const result = await db.run(
+      `DELETE FROM devices WHERE device_id = ?`,
+      [deviceId]
+    );
+    
+    if (result.changes > 0) {
       // Update code used_count
       if (code) {
         await db.run(
           `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
           [code]
         );
+        console.log(`✅ Updated code ${code} used_count to ${await db.getCodeUsage(code).then(u => u.used)}`);
       }
       
-      await db.logUsage(deviceId, code, 'admin_remove_user', 
-        `User removed by admin ${req.session.username}`);
+      await db.logUsage(deviceId, code, 'remove_user', 'User removed from extension');
+      
+      console.log(`✅ Device ${deviceId} removed successfully`);
       
       res.json({ 
         success: true, 
-        message: `User removed, slot freed. Device will need to re-enter code.` 
+        message: `User removed, slot freed. Device will need to re-enter code.`,
+        deviceId: deviceId,
+        code: code
       });
     } else {
-      res.status(404).json({ error: 'Device not found' });
+      res.status(404).json({ error: 'Failed to remove device' });
     }
   } catch (error) {
     console.error('Remove user error:', error);
