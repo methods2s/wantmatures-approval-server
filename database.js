@@ -149,7 +149,7 @@ class DeviceDatabase {
 
   async getActiveCodes() {
     return await this.all(
-      `SELECT * FROM codes WHERE is_active = 1`
+      `SELECT * FROM codes WHERE is_active = 1 ORDER BY created_at DESC`
     );
   }
 
