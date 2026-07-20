@@ -258,7 +258,7 @@ app.post('/api/request-code', async (req, res) => {
 });
 
 // ---------- GENERATE CODE ----------
-// Only asks for username, removes request from list
+// ONLY asks for username, deletes the request from list
 
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   const { username } = req.body;
@@ -271,10 +271,10 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
     // Generate the code with default max_devices = 10
     const code = await db.generateCode(10, req.session.username, `For user: ${username}`);
     
-    // DELETE the pending request - removes it from code request list
+    // DELETE the pending request - this removes it from the code request list
     const deleteResult = await db.run(
       `DELETE FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
-      [username]
+      [username.trim()]
     );
     
     console.log(`🗑️ Deleted ${deleteResult.changes} pending request(s) for ${username}`);
@@ -284,7 +284,7 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
       `UPDATE devices 
        SET code = ?, status = 'approved', approved_at = CURRENT_TIMESTAMP
        WHERE device_id = ?`,
-      [code, username]
+      [code, username.trim()]
     );
     
     // Log the action

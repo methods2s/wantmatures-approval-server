@@ -186,7 +186,7 @@ class DeviceDatabase {
       [code]
     );
     
-    // Deactivate the code
+    // Deactivate the code - set used_count to 0
     const result = await this.run(
       `UPDATE codes SET is_active = 0, used_count = 0 WHERE code = ?`,
       [code]
