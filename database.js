@@ -71,7 +71,6 @@ class DeviceDatabase {
         is_active BOOLEAN DEFAULT 1,
         created_by TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        expires_at DATETIME,
         notes TEXT
       )
     `);
@@ -181,12 +180,36 @@ class DeviceDatabase {
     
     // Then deactivate the code
     const result = await this.run(
-      `UPDATE codes SET is_active = 0 WHERE code = ?`,
+      `UPDATE codes SET is_active = 0, used_count = 0 WHERE code = ?`,
       [code]
     );
     
     if (result.changes > 0) {
-      console.log(`✅ Code deactivated: ${code} (${result.changes} devices revoked)`);
+      console.log(`✅ Code deactivated: ${code}`);
+      return true;
+    }
+    return false;
+  }
+
+  async deleteCode(code) {
+    // First revoke all devices
+    await this.run(
+      `UPDATE devices 
+       SET status = 'revoked', 
+           revoked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Then delete the code
+    const result = await this.run(
+      `DELETE FROM codes WHERE code = ?`,
+      [code]
+    );
+    
+    if (result.changes > 0) {
+      console.log(`🗑️ Code deleted: ${code}`);
       return true;
     }
     return false;

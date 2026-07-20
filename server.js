@@ -228,6 +228,7 @@ app.post('/api/request-code', async (req, res) => {
   try {
     console.log(`📨 Code request from device: ${deviceId || 'unknown'}`);
     
+    // Check if device already has a pending request
     const existing = await db.get(
       `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
       [deviceId || 'unknown']
@@ -236,6 +237,18 @@ app.post('/api/request-code', async (req, res) => {
     if (existing) {
       return res.status(400).json({ 
         error: 'You already have a pending request. Please wait for admin.' 
+      });
+    }
+    
+    // Check if device already has a request that was approved but no code was generated
+    const existingApproved = await db.get(
+      `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'approved'`,
+      [deviceId || 'unknown']
+    );
+    
+    if (existingApproved) {
+      return res.status(400).json({ 
+        error: 'Your previous request was approved but no code was generated. Please contact admin.' 
       });
     }
     
@@ -260,7 +273,7 @@ app.post('/api/request-code', async (req, res) => {
 });
 
 // ---------- GENERATE CODE ----------
-// FIXED: Removes pending request after generating code
+// FIXED: Removes the pending request entirely after generating code
 
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   const { username, maxDevices = 10 } = req.body;
@@ -274,6 +287,7 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
     const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
     
     // FIXED: Update the pending request to approved and mark it as responded
+    // Then remove it from pending list
     await db.run(
       `UPDATE requests 
        SET status = 'approved', 
@@ -283,6 +297,18 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
        WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
       [code, `Code generated for ${username} by ${req.session.username}`, username]
     );
+    
+    // Also update any device with this device_id to have the code
+    await db.run(
+      `UPDATE devices 
+       SET code = ?, status = 'approved', approved_at = CURRENT_TIMESTAMP
+       WHERE device_id = ?`,
+      [code, username]
+    );
+    
+    // Log the action
+    await db.logUsage(username, code, 'code_generated', 
+      `Code ${code} generated for ${username} by ${req.session.username}`);
     
     res.json({ 
       success: true, 
@@ -324,24 +350,87 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DEACTIVATE CODE ----------
-// FIXED: Deactivates code AND revokes all devices using it
+// FIXED: Deactivates code, revokes all devices, removes from code list
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
   
   try {
-    const success = await db.deactivateCode(code);
-    if (success) {
+    // Get all devices using this code
+    const devices = await db.all(
+      `SELECT device_id FROM devices WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Revoke all devices
+    for (const device of devices) {
+      await db.run(
+        `UPDATE devices 
+         SET status = 'revoked', 
+             revoked_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE device_id = ?`,
+        [device.device_id]
+      );
+    }
+    
+    // Reset used_count to 0
+    await db.run(
+      `UPDATE codes SET used_count = 0, is_active = 0 WHERE code = ?`,
+      [code]
+    );
+    
+    // Log the action
+    await db.logUsage('admin', code, 'code_deactivated', 
+      `Code ${code} deactivated by ${req.session.username}, ${devices.length} devices revoked`);
+    
+    res.json({ 
+      success: true, 
+      message: `Code deactivated and ${devices.length} devices revoked`,
+      devicesRevoked: devices.length
+    });
+  } catch (error) {
+    console.error('Deactivate code error:', error);
+    res.status(500).json({ error: 'Failed to deactivate code' });
+  }
+});
+
+// ---------- DELETE CODE (FULL REMOVE) ----------
+
+app.delete('/api/code/:code', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    // First revoke all devices
+    await db.run(
+      `UPDATE devices 
+       SET status = 'revoked', 
+           revoked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Then delete the code
+    const result = await db.run(
+      `DELETE FROM codes WHERE code = ?`,
+      [code]
+    );
+    
+    if (result.changes > 0) {
+      await db.logUsage('admin', code, 'code_deleted', 
+        `Code ${code} deleted by ${req.session.username}`);
+      
       res.json({ 
         success: true, 
-        message: `Code deactivated and all associated devices revoked` 
+        message: `Code ${code} deleted and all associated devices revoked` 
       });
     } else {
       res.status(404).json({ error: 'Code not found' });
     }
   } catch (error) {
-    console.error('Deactivate code error:', error);
-    res.status(500).json({ error: 'Failed to deactivate code' });
+    console.error('Delete code error:', error);
+    res.status(500).json({ error: 'Failed to delete code' });
   }
 });
 
@@ -356,8 +445,17 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
   }
   
   try {
+    // Reactivate if inactive
+    await db.run(
+      `UPDATE codes SET is_active = 1 WHERE code = ?`,
+      [code]
+    );
+    
     const success = await db.extendCode(code, maxDevices);
     if (success) {
+      await db.logUsage('admin', code, 'code_extended', 
+        `Code ${code} extended to ${maxDevices} devices by ${req.session.username}`);
+      
       res.json({ success: true, message: `Code extended to ${maxDevices} devices` });
     } else {
       res.status(404).json({ error: 'Code not found' });
@@ -374,8 +472,27 @@ app.delete('/api/device/:deviceId', isApiAuthenticated, async (req, res) => {
   const { deviceId } = req.params;
   
   try {
+    const device = await db.getDevice(deviceId);
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+    
+    const code = device.code;
+    
+    // Delete the device
     const success = await db.removeUser(deviceId);
     if (success) {
+      // Update code used_count
+      if (code) {
+        await db.run(
+          `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
+          [code]
+        );
+      }
+      
+      await db.logUsage(deviceId, code, 'admin_remove_user', 
+        `User removed by admin ${req.session.username}`);
+      
       res.json({ 
         success: true, 
         message: `User removed, slot freed. Device will need to re-enter code.` 
@@ -397,6 +514,8 @@ app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
   try {
     const result = await db.reactivateDevice(deviceId);
     if (result && result.success !== false) {
+      await db.logUsage(deviceId, null, 'reactivate', 
+        `Device reactivated by admin ${req.session.username}`);
       res.json({ success: true, message: `Device reactivated` });
     } else if (result && result.error) {
       res.status(400).json({ error: result.error });
@@ -461,7 +580,8 @@ app.post('/api/device/:deviceId/assign-code', isApiAuthenticated, async (req, re
       [code]
     );
     
-    await db.logUsage(deviceId, code, 'assign_code', `Device assigned to code by admin`);
+    await db.logUsage(deviceId, code, 'assign_code', 
+      `Device assigned to code by admin ${req.session.username}`);
     
     res.json({ 
       success: true, 
@@ -552,6 +672,10 @@ app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res)
   try {
     const success = await db.respondToRequest(requestId, status, response || '');
     if (success) {
+      // If rejected, delete the request
+      if (status === 'rejected') {
+        await db.run(`DELETE FROM requests WHERE id = ?`, [requestId]);
+      }
       res.json({ success: true, message: `Request ${status}` });
     } else {
       res.status(404).json({ error: 'Request not found' });
