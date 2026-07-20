@@ -93,20 +93,19 @@ app.get('/logout', (req, res) => {
 });
 
 app.get('/dashboard', isAuthenticated, async (req, res) => {
+  // FIXED: Only get PENDING requests for the request list
   const devices = await db.getDevices();
   const stats = await db.getStats();
-  const codes = await db.getAllCodes();
-  const requests = await db.getPendingRequests();
-  const codeRequests = await db.all(
-    `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
-  );
+  const codes = await db.getAllCodes(); // Get all codes (including inactive)
+  const pendingRequests = await db.getPendingRequests(); // Only pending
+  const codeRequests = await db.getPendingCodeRequests(); // Only pending code requests
   
   res.render('dashboard', { 
     username: req.session.username,
     devices: devices,
     stats: stats,
     codes: codes,
-    requests: requests,
+    requests: pendingRequests,
     codeRequests: codeRequests
   });
 });
@@ -274,15 +273,10 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
     // Generate the code
     const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
     
-    // FIXED: Update the pending request to approved
+    // FIXED: Delete the pending request completely (not just update)
     await db.run(
-      `UPDATE requests 
-       SET status = 'approved', 
-           code = ?,
-           admin_response = ?,
-           responded_at = CURRENT_TIMESTAMP
-       WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
-      [code, `Code generated for ${username} by ${req.session.username}`, username]
+      `DELETE FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
+      [username]
     );
     
     // Also update any device with this device_id to have the code
@@ -311,13 +305,29 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- GET ALL CODES ----------
+// FIXED: Only return active codes
 
 app.get('/api/codes', isApiAuthenticated, async (req, res) => {
+  try {
+    // Only return active codes
+    const codes = await db.all(
+      `SELECT * FROM codes WHERE is_active = 1 ORDER BY created_at DESC`
+    );
+    res.json(codes);
+  } catch (error) {
+    console.error('Get codes error:', error);
+    res.status(500).json({ error: 'Failed to get codes' });
+  }
+});
+
+// ---------- GET ALL CODES (INCLUDING INACTIVE) ----------
+
+app.get('/api/codes/all', isApiAuthenticated, async (req, res) => {
   try {
     const codes = await db.getAllCodes();
     res.json(codes);
   } catch (error) {
-    console.error('Get codes error:', error);
+    console.error('Get all codes error:', error);
     res.status(500).json({ error: 'Failed to get codes' });
   }
 });
@@ -337,7 +347,7 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DEACTIVATE CODE ----------
-// FIXED: Deactivates code, revokes all devices, removes from active list
+// FIXED: Deactivates code and removes from active list
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
@@ -421,6 +431,27 @@ app.delete('/api/code/:code', isApiAuthenticated, async (req, res) => {
   }
 });
 
+// ---------- REACTIVATE CODE ----------
+
+app.post('/api/code/:code/reactivate', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    await db.run(
+      `UPDATE codes SET is_active = 1 WHERE code = ?`,
+      [code]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: `Code ${code} reactivated` 
+    });
+  } catch (error) {
+    console.error('Reactivate code error:', error);
+    res.status(500).json({ error: 'Failed to reactivate code' });
+  }
+});
+
 // ---------- EXTEND CODE ----------
 
 app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
@@ -454,7 +485,6 @@ app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DELETE DEVICE (FULL REMOVE - Called by extension) ----------
-// FIXED: Properly removes device and updates admin dashboard
 
 app.delete('/api/device/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
@@ -484,7 +514,7 @@ app.delete('/api/device/:deviceId', async (req, res) => {
           `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
           [code]
         );
-        console.log(`✅ Updated code ${code} used_count to ${await db.getCodeUsage(code).then(u => u.used)}`);
+        console.log(`✅ Updated code ${code} used_count`);
       }
       
       await db.logUsage(deviceId, code, 'remove_user', 'User removed from extension');
@@ -647,11 +677,7 @@ app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
 
 app.get('/api/requests/code', isApiAuthenticated, async (req, res) => {
   try {
-    const requests = await db.all(
-      `SELECT * FROM requests 
-       WHERE code IS NULL AND status = 'pending'
-       ORDER BY requested_at DESC`
-    );
+    const requests = await db.getPendingCodeRequests();
     res.json(requests);
   } catch (error) {
     console.error('Get code requests error:', error);
@@ -718,17 +744,15 @@ app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
     const devices = await db.getDevices();
     const stats = await db.getStats();
     const codes = await db.getAllCodes();
-    const requests = await db.getPendingRequests();
-    const codeRequests = await db.all(
-      `SELECT * FROM requests WHERE code IS NULL AND status = 'pending' ORDER BY requested_at DESC`
-    );
+    const pendingRequests = await db.getPendingRequests();
+    const codeRequests = await db.getPendingCodeRequests();
     
     res.json({
       stats,
       devices,
       codes,
-      requests,
-      codeRequests,
+      requests: pendingRequests,
+      codeRequests: codeRequests,
       username: req.session.username
     });
   } catch (error) {

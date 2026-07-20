@@ -153,6 +153,14 @@ class DeviceDatabase {
     );
   }
 
+  async getPendingCodeRequests() {
+    return await this.all(
+      `SELECT * FROM requests 
+       WHERE code IS NULL AND status = 'pending'
+       ORDER BY requested_at DESC`
+    );
+  }
+
   async getCodeUsage(code) {
     const devices = await this.all(
       `SELECT * FROM devices WHERE code = ? AND status != 'revoked'`,
