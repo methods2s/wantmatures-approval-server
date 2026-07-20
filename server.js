@@ -260,6 +260,7 @@ app.post('/api/request-code', async (req, res) => {
 });
 
 // ---------- GENERATE CODE ----------
+// FIXED: Removes pending request after generating code
 
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   const { username, maxDevices = 10 } = req.body;
@@ -269,8 +270,10 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
   }
   
   try {
+    // Generate the code
     const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
     
+    // FIXED: Update the pending request to approved and mark it as responded
     await db.run(
       `UPDATE requests 
        SET status = 'approved', 
@@ -321,6 +324,7 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DEACTIVATE CODE ----------
+// FIXED: Deactivates code AND revokes all devices using it
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
@@ -328,7 +332,10 @@ app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   try {
     const success = await db.deactivateCode(code);
     if (success) {
-      res.json({ success: true, message: `Code deactivated` });
+      res.json({ 
+        success: true, 
+        message: `Code deactivated and all associated devices revoked` 
+      });
     } else {
       res.status(404).json({ error: 'Code not found' });
     }

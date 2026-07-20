@@ -150,7 +150,7 @@ class DeviceDatabase {
 
   async getActiveCodes() {
     return await this.all(
-      `SELECT * FROM codes WHERE is_active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
+      `SELECT * FROM codes WHERE is_active = 1`
     );
   }
 
@@ -169,12 +169,24 @@ class DeviceDatabase {
   }
 
   async deactivateCode(code) {
+    // First, revoke all devices using this code
+    await this.run(
+      `UPDATE devices 
+       SET status = 'revoked', 
+           revoked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Then deactivate the code
     const result = await this.run(
       `UPDATE codes SET is_active = 0 WHERE code = ?`,
       [code]
     );
+    
     if (result.changes > 0) {
-      console.log(`✅ Code deactivated: ${code}`);
+      console.log(`✅ Code deactivated: ${code} (${result.changes} devices revoked)`);
       return true;
     }
     return false;
@@ -206,10 +218,6 @@ class DeviceDatabase {
       return { success: false, error: 'Code is inactive' };
     }
 
-    if (codeInfo.expires_at && new Date(codeInfo.expires_at) < new Date()) {
-      return { success: false, error: 'Code has expired' };
-    }
-
     const existingDevice = await this.getDevice(deviceId);
     if (existingDevice) {
       if (existingDevice.code === code) {
@@ -219,6 +227,8 @@ class DeviceDatabase {
                user_agent = ?, 
                ip_address = ?, 
                browser_info = ?,
+               approved_at = CURRENT_TIMESTAMP,
+               revoked_at = NULL,
                updated_at = CURRENT_TIMESTAMP 
            WHERE device_id = ?`,
           [userAgent || '', ip || '', browserInfo || '', deviceId]
@@ -418,8 +428,11 @@ class DeviceDatabase {
     if (!device) return false;
 
     if (device.code) {
-      const usage = await this.getCodeUsage(device.code);
       const codeInfo = await this.getCodeInfo(device.code);
+      if (!codeInfo || !codeInfo.is_active) {
+        return { success: false, error: 'Code is inactive' };
+      }
+      const usage = await this.getCodeUsage(device.code);
       if (usage.used >= codeInfo.max_devices) {
         return { success: false, error: 'Code is full' };
       }
@@ -510,6 +523,7 @@ class DeviceDatabase {
     const revoked = await this.get("SELECT COUNT(*) as count FROM devices WHERE status = 'revoked'");
     const totalPings = await this.get('SELECT SUM(ping_count) as total FROM devices');
     const totalCodes = await this.get('SELECT COUNT(*) as count FROM codes');
+    const activeCodes = await this.get("SELECT COUNT(*) as count FROM codes WHERE is_active = 1");
     const pendingRequests = await this.get("SELECT COUNT(*) as count FROM requests WHERE status = 'pending'");
 
     return {
@@ -519,6 +533,7 @@ class DeviceDatabase {
       revoked: revoked.count,
       totalPings: totalPings.total || 0,
       totalCodes: totalCodes.count,
+      activeCodes: activeCodes.count,
       pendingRequests: pendingRequests.count
     };
   }
