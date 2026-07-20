@@ -1,595 +1,800 @@
-const sqlite3 = require('sqlite3');
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcrypt');
 const path = require('path');
-const fs = require('fs');
+const db = require('./database');
 
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.set('trust proxy', 1);
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'default-secret-change-me',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  }
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: '*',
+  credentials: true
+}));
+app.use(express.static('public'));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+function isAuthenticated(req, res, next) {
+  if (req.session && req.session.isAuthenticated) {
+    return next();
+  }
+  res.redirect('/login');
 }
 
-const dbPath = path.join(dataDir, 'devices.db');
+function isApiAuthenticated(req, res, next) {
+  if (req.session && req.session.isAuthenticated) {
+    return next();
+  }
+  res.status(401).json({ error: 'Unauthorized', message: 'Please log in' });
+}
 
-class DeviceDatabase {
-  constructor() {
-    this.db = new sqlite3.Database(dbPath);
-    this.initTables();
-    console.log('✅ Database initialized at:', dbPath);
+// ============================================
+// WEB ROUTES
+// ============================================
+
+app.get('/login', (req, res) => {
+  if (req.session && req.session.isAuthenticated) {
+    return res.redirect('/dashboard');
+  }
+  res.render('login', { error: null });
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.render('login', { error: 'Username and password required' });
   }
 
-  run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve({ changes: this.changes, lastID: this.lastID });
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+  
+  if (username === adminUsername && password === adminPassword) {
+    req.session.isAuthenticated = true;
+    req.session.username = username;
+    return res.redirect('/dashboard');
+  }
+  
+  res.render('login', { error: 'Invalid username or password' });
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+app.get('/dashboard', isAuthenticated, async (req, res) => {
+  const devices = await db.getDevices();
+  const stats = await db.getStats();
+  const codes = await db.getActiveCodes();
+  const pendingRequests = await db.getPendingRequests();
+  const codeRequests = await db.getPendingCodeRequests();
+  
+  res.render('dashboard', { 
+    username: req.session.username,
+    devices: devices,
+    stats: stats,
+    codes: codes,
+    requests: pendingRequests,
+    codeRequests: codeRequests
+  });
+});
+
+app.get('/', (req, res) => {
+  res.redirect('/dashboard');
+});
+
+// ============================================
+// API ROUTES
+// ============================================
+
+// ---------- REGISTRATION WITH AUTO-APPROVAL ----------
+
+app.post('/api/register', async (req, res) => {
+  const { deviceId, userAgent, browserInfo, code } = req.body;
+  
+  if (!deviceId) {
+    return res.status(400).json({ error: 'Device ID is required' });
+  }
+
+  if (!code) {
+    return res.status(400).json({ error: 'Activation code is required' });
+  }
+
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  
+  try {
+    const result = await db.registerDeviceWithCode(deviceId, userAgent || '', ip, browserInfo || '', code.toUpperCase());
+    
+    if (!result.success) {
+      return res.status(400).json({ 
+        error: result.error,
+        status: 'registration_failed',
+        limitReached: result.limitReached || false
       });
-    });
-  }
+    }
 
-  get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
+    res.json({
+      success: true,
+      status: result.status,
+      code: result.code,
+      message: `Device registered and auto-approved!`
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// ---------- STATUS CHECK ----------
+
+app.get('/api/status/:deviceId', async (req, res) => {
+  const { deviceId } = req.params;
+  
+  try {
+    const result = await db.getDeviceStatus(deviceId);
+    
+    if (!result.exists) {
+      return res.status(404).json({ 
+        exists: false, 
+        status: 'not_found',
+        message: 'Device not found - Enter code again' 
       });
+    }
+
+    await db.updatePing(deviceId);
+
+    res.json({
+      exists: true,
+      status: result.status,
+      code: result.code,
+      device: result.device
     });
+  } catch (error) {
+    console.error('Status check error:', error);
+    res.status(500).json({ error: 'Failed to check status' });
   }
+});
 
-  all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-  }
+// ---------- FORCE DEVICE STATUS CHECK ----------
 
-  initTables() {
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS devices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        device_id TEXT UNIQUE NOT NULL,
-        user_agent TEXT,
-        ip_address TEXT,
-        browser_info TEXT,
-        code TEXT,
-        status TEXT DEFAULT 'approved',
-        approved_at DATETIME,
-        revoked_at DATETIME,
-        last_ping DATETIME,
-        ping_count INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (code) REFERENCES codes(code)
-      )
-    `);
-
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS codes (
-        code TEXT PRIMARY KEY,
-        max_devices INTEGER DEFAULT 10,
-        used_count INTEGER DEFAULT 0,
-        is_active BOOLEAN DEFAULT 1,
-        created_by TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        notes TEXT
-      )
-    `);
-
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        device_id TEXT NOT NULL,
-        code TEXT,
-        reason TEXT,
-        status TEXT DEFAULT 'pending',
-        requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        responded_at DATETIME,
-        admin_response TEXT,
-        FOREIGN KEY (device_id) REFERENCES devices(device_id)
-      )
-    `);
-
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS usage_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        device_id TEXT NOT NULL,
-        code TEXT,
-        action TEXT NOT NULL,
-        details TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (device_id) REFERENCES devices(device_id)
-      )
-    `);
-
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS admins (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    console.log('✅ Tables created/verified');
-  }
-
-  // ============================================
-  // CODE MANAGEMENT
-  // ============================================
-
-  async generateCode(maxDevices = 10, createdBy = 'admin', notes = '') {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    code = code.slice(0, 4) + '-' + code.slice(4);
-
-    try {
-      await this.run(
-        `INSERT INTO codes (code, max_devices, created_by, notes)
-         VALUES (?, ?, ?, ?)`,
-        [code, maxDevices, createdBy, notes || '']
-      );
-      console.log(`✅ Code generated: ${code} (max: ${maxDevices} devices)`);
-      return code;
-    } catch (error) {
-      console.error('Generate code error:', error);
-      throw error;
-    }
-  }
-
-  async getCodeInfo(code) {
-    return await this.get(`SELECT * FROM codes WHERE code = ?`, [code]);
-  }
-
-  async getAllCodes() {
-    return await this.all(`SELECT * FROM codes ORDER BY created_at DESC`);
-  }
-
-  async getActiveCodes() {
-    return await this.all(
-      `SELECT * FROM codes WHERE is_active = 1 ORDER BY created_at DESC`
-    );
-  }
-
-  async getPendingCodeRequests() {
-    return await this.all(
-      `SELECT * FROM requests 
-       WHERE code IS NULL AND status = 'pending'
-       ORDER BY requested_at DESC`
-    );
-  }
-
-  async getCodeUsage(code) {
-    const devices = await this.all(
-      `SELECT * FROM devices WHERE code = ? AND status != 'revoked'`,
-      [code]
-    );
-    const codeInfo = await this.getCodeInfo(code);
-    return {
-      code: code,
-      used: devices.length,
-      max: codeInfo ? codeInfo.max_devices : 0,
-      devices: devices
-    };
-  }
-
-  async deactivateCode(code) {
-    await this.run(
-      `UPDATE devices 
-       SET status = 'revoked', 
-           revoked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE code = ? AND status != 'revoked'`,
-      [code]
-    );
+app.get('/api/device-status/:deviceId', async (req, res) => {
+  const { deviceId } = req.params;
+  
+  try {
+    const device = await db.getDevice(deviceId);
     
-    const result = await this.run(
-      `UPDATE codes SET is_active = 0, used_count = 0 WHERE code = ?`,
-      [code]
-    );
-    
-    if (result.changes > 0) {
-      console.log(`✅ Code deactivated: ${code}`);
-      return true;
-    }
-    return false;
-  }
-
-  async deleteCode(code) {
-    await this.run(
-      `UPDATE devices 
-       SET status = 'revoked', 
-           revoked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE code = ? AND status != 'revoked'`,
-      [code]
-    );
-    
-    const result = await this.run(
-      `DELETE FROM codes WHERE code = ?`,
-      [code]
-    );
-    
-    if (result.changes > 0) {
-      console.log(`🗑️ Code deleted: ${code}`);
-      return true;
-    }
-    return false;
-  }
-
-  async extendCode(code, maxDevices) {
-    const result = await this.run(
-      `UPDATE codes SET max_devices = ? WHERE code = ?`,
-      [maxDevices, code]
-    );
-    if (result.changes > 0) {
-      console.log(`✅ Code extended: ${code} -> max ${maxDevices} devices`);
-      return true;
-    }
-    return false;
-  }
-
-  // ============================================
-  // DEVICE REGISTRATION WITH AUTO-APPROVAL
-  // ============================================
-
-  async registerDeviceWithCode(deviceId, userAgent, ip, browserInfo, code) {
-    const codeInfo = await this.getCodeInfo(code);
-    if (!codeInfo) {
-      return { success: false, error: 'Invalid code' };
-    }
-
-    if (!codeInfo.is_active) {
-      return { success: false, error: 'Code is inactive' };
-    }
-
-    const existingDevice = await this.getDevice(deviceId);
-    if (existingDevice) {
-      if (existingDevice.code === code) {
-        await this.run(
-          `UPDATE devices 
-           SET status = 'approved', 
-               user_agent = ?, 
-               ip_address = ?, 
-               browser_info = ?,
-               approved_at = CURRENT_TIMESTAMP,
-               revoked_at = NULL,
-               updated_at = CURRENT_TIMESTAMP 
-           WHERE device_id = ?`,
-          [userAgent || '', ip || '', browserInfo || '', deviceId]
-        );
-        await this.logUsage(deviceId, code, 're-register', 'Device re-registered');
-        return { success: true, status: 'approved', code: code };
-      }
-    }
-
-    const usage = await this.getCodeUsage(code);
-    if (usage.used >= usage.max) {
-      await this.logUsage(deviceId, code, 'registration_failed', 'Code limit reached');
-      return { success: false, error: `Code limit reached (${usage.max} devices max)`, limitReached: true };
-    }
-
-    await this.run(
-      `INSERT INTO devices (device_id, user_agent, ip_address, browser_info, code, status, approved_at)
-       VALUES (?, ?, ?, ?, ?, 'approved', CURRENT_TIMESTAMP)`,
-      [deviceId, userAgent || '', ip || '', browserInfo || '', code]
-    );
-
-    await this.run(
-      `UPDATE codes SET used_count = used_count + 1 WHERE code = ?`,
-      [code]
-    );
-
-    await this.logUsage(deviceId, code, 'register', 'Device registered and auto-approved');
-    return { success: true, status: 'approved', code: code };
-  }
-
-  // ============================================
-  // REQUEST MANAGEMENT
-  // ============================================
-
-  async createRequest(deviceId, code, reason = '') {
-    const device = await this.getDevice(deviceId);
     if (!device) {
-      return { success: false, error: 'Device not found' };
-    }
-
-    const existing = await this.get(
-      `SELECT * FROM requests WHERE device_id = ? AND status = 'pending'`,
-      [deviceId]
-    );
-    if (existing) {
-      return { success: false, error: 'You already have a pending request' };
-    }
-
-    try {
-      const result = await this.run(
-        `INSERT INTO requests (device_id, code, reason)
-         VALUES (?, ?, ?)`,
-        [deviceId, code || device.code, reason || 'Need more slots']
-      );
-      await this.logUsage(deviceId, code || device.code, 'request', 'Device requested more slots');
-      return { success: true, id: result.lastID };
-    } catch (error) {
-      console.error('Create request error:', error);
-      return { success: false, error: 'Failed to create request' };
-    }
-  }
-
-  async getPendingRequests() {
-    return await this.all(
-      `SELECT r.*, d.status as device_status 
-       FROM requests r
-       LEFT JOIN devices d ON r.device_id = d.device_id
-       WHERE r.status = 'pending'
-       ORDER BY r.requested_at ASC`
-    );
-  }
-
-  async getAllRequests() {
-    return await this.all(
-      `SELECT r.*, d.status as device_status 
-       FROM requests r
-       LEFT JOIN devices d ON r.device_id = d.device_id
-       ORDER BY r.requested_at DESC`
-    );
-  }
-
-  async respondToRequest(requestId, status, adminResponse = '') {
-    const request = await this.get(`SELECT * FROM requests WHERE id = ?`, [requestId]);
-    if (!request) return false;
-
-    const result = await this.run(
-      `UPDATE requests 
-       SET status = ?, responded_at = CURRENT_TIMESTAMP, admin_response = ?
-       WHERE id = ?`,
-      [status, adminResponse, requestId]
-    );
-    
-    if (result.changes > 0) {
-      await this.logUsage(request.device_id, request.code, 'request_response', 
-        `Request ${status}: ${adminResponse}`);
-      
-      if (status === 'approved' && request.code) {
-        const codeInfo = await this.getCodeInfo(request.code);
-        if (codeInfo) {
-          const newLimit = codeInfo.max_devices + 1;
-          await this.extendCode(request.code, newLimit);
-          await this.logUsage(request.device_id, request.code, 'code_extended', 
-            `Extended to ${newLimit} devices due to request`);
-        }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  async getRequestByDevice(deviceId) {
-    return await this.all(
-      `SELECT * FROM requests WHERE device_id = ? ORDER BY requested_at DESC`,
-      [deviceId]
-    );
-  }
-
-  // ============================================
-  // DEVICE MANAGEMENT
-  // ============================================
-
-  async getDevice(deviceId) {
-    return await this.get(`SELECT * FROM devices WHERE device_id = ?`, [deviceId]);
-  }
-
-  async getDevices(status = null) {
-    let query = 'SELECT * FROM devices';
-    const params = [];
-    
-    if (status) {
-      query += ' WHERE status = ?';
-      params.push(status);
+      return res.json({ 
+        exists: false, 
+        status: 'not_found',
+        message: 'Device not found' 
+      });
     }
     
-    query += ' ORDER BY created_at DESC';
-    return await this.all(query, params);
-  }
-
-  async getDevicesByCode(code) {
-    return await this.all(`SELECT * FROM devices WHERE code = ? ORDER BY created_at DESC`, [code]);
-  }
-
-  async removeUser(deviceId) {
-    const device = await this.getDevice(deviceId);
-    if (!device) return false;
-
-    const code = device.code;
-    
-    const result = await this.run(
-      `DELETE FROM devices WHERE device_id = ?`,
-      [deviceId]
-    );
-    
-    if (result.changes > 0) {
-      if (code) {
-        await this.run(
-          `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
-          [code]
-        );
-        await this.logUsage(deviceId, code, 'remove_user', 'User removed, slot freed');
-      }
-      console.log(`🗑️ User ${deviceId} removed, slot freed for code ${code}`);
-      return true;
-    }
-    return false;
-  }
-
-  async revokeDevice(deviceId) {
-    const device = await this.getDevice(deviceId);
-    if (!device) return false;
-
-    const result = await this.run(
-      `UPDATE devices 
-       SET status = 'revoked', 
-           revoked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE device_id = ?`,
-      [deviceId]
-    );
-    
-    if (result.changes > 0) {
-      if (device.code) {
-        await this.run(
-          `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
-          [device.code]
-        );
-        await this.logUsage(deviceId, device.code, 'revoke', 'Device revoked, slot freed');
-      }
-      return true;
-    }
-    return false;
-  }
-
-  async reactivateDevice(deviceId) {
-    const device = await this.getDevice(deviceId);
-    if (!device) return false;
-
-    if (device.code) {
-      const codeInfo = await this.getCodeInfo(device.code);
-      if (!codeInfo || !codeInfo.is_active) {
-        return { success: false, error: 'Code is inactive' };
-      }
-      const usage = await this.getCodeUsage(device.code);
-      if (usage.used >= codeInfo.max_devices) {
-        return { success: false, error: 'Code is full' };
-      }
-    }
-
-    const result = await this.run(
-      `UPDATE devices 
-       SET status = 'approved', 
-           approved_at = CURRENT_TIMESTAMP,
-           revoked_at = NULL,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE device_id = ?`,
-      [deviceId]
-    );
-    
-    if (result.changes > 0) {
-      if (device.code) {
-        await this.run(
-          `UPDATE codes SET used_count = used_count + 1 WHERE code = ?`,
-          [device.code]
-        );
-        await this.logUsage(deviceId, device.code, 'reactivate', 'Device reactivated');
-      }
-      return { success: true };
-    }
-    return false;
-  }
-
-  async updatePing(deviceId) {
-    await this.run(
-      `UPDATE devices 
-       SET last_ping = CURRENT_TIMESTAMP,
-           ping_count = ping_count + 1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE device_id = ?`,
-      [deviceId]
-    );
-  }
-
-  async getDeviceStatus(deviceId) {
-    const device = await this.getDevice(deviceId);
-    if (!device) {
-      return { exists: false, status: 'not_found' };
-    }
-    return { 
-      exists: true, 
+    res.json({
+      exists: true,
       status: device.status,
       code: device.code,
       device: {
         id: device.device_id,
         approved_at: device.approved_at,
-        revoked_at: device.revoked_at
+        revoked_at: device.revoked_at,
+        created_at: device.created_at
       }
-    };
+    });
+  } catch (error) {
+    console.error('Device status error:', error);
+    res.status(500).json({ error: 'Failed to check device status' });
   }
+});
 
-  async logUsage(deviceId, code, action, details = '') {
-    try {
-      await this.run(
-        `INSERT INTO usage_logs (device_id, code, action, details)
-         VALUES (?, ?, ?, ?)`,
-        [deviceId, code || null, action, details]
+// ---------- REQUEST CODE ----------
+
+app.post('/api/request-code', async (req, res) => {
+  const { deviceId } = req.body;
+  
+  try {
+    console.log(`📨 Code request from device: ${deviceId || 'unknown'}`);
+    
+    const existing = await db.get(
+      `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
+      [deviceId || 'unknown']
+    );
+    
+    if (existing) {
+      return res.status(400).json({ 
+        error: 'You already have a pending request. Please wait for admin.' 
+      });
+    }
+    
+    await db.run(
+      `INSERT INTO requests (device_id, code, reason, status)
+       VALUES (?, ?, ?, 'pending')`,
+      [deviceId || 'unknown', null, 'New user requesting activation code']
+    );
+    
+    await db.logUsage(deviceId || 'unknown', null, 'code_request', 
+      `Code requested by device`);
+    
+    res.json({
+      success: true,
+      message: 'Code request submitted. Admin will review.'
+    });
+    
+  } catch (error) {
+    console.error('Code request error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// ---------- GENERATE CODE ----------
+// Only asks for username, removes request from list
+
+app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
+  const { username } = req.body;
+  
+  if (!username || username.trim() === '') {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+  
+  try {
+    // Generate the code with default max_devices = 10
+    const code = await db.generateCode(10, req.session.username, `For user: ${username}`);
+    
+    // DELETE the pending request - removes it from code request list
+    const deleteResult = await db.run(
+      `DELETE FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
+      [username]
+    );
+    
+    console.log(`🗑️ Deleted ${deleteResult.changes} pending request(s) for ${username}`);
+    
+    // Also update any device with this device_id to have the code
+    await db.run(
+      `UPDATE devices 
+       SET code = ?, status = 'approved', approved_at = CURRENT_TIMESTAMP
+       WHERE device_id = ?`,
+      [code, username]
+    );
+    
+    // Log the action
+    await db.logUsage(username, code, 'code_generated', 
+      `Code ${code} generated for ${username} by ${req.session.username}`);
+    
+    res.json({ 
+      success: true, 
+      code: code,
+      username: username,
+      message: `Code ${code} generated for ${username}`
+    });
+  } catch (error) {
+    console.error('Generate code error:', error);
+    res.status(500).json({ error: 'Failed to generate code' });
+  }
+});
+
+// ---------- GET ACTIVE CODES ----------
+
+app.get('/api/codes', isApiAuthenticated, async (req, res) => {
+  try {
+    const codes = await db.getActiveCodes();
+    res.json(codes);
+  } catch (error) {
+    console.error('Get codes error:', error);
+    res.status(500).json({ error: 'Failed to get codes' });
+  }
+});
+
+// ---------- GET ALL CODES (INCLUDING INACTIVE) ----------
+
+app.get('/api/codes/all', isApiAuthenticated, async (req, res) => {
+  try {
+    const codes = await db.getAllCodes();
+    res.json(codes);
+  } catch (error) {
+    console.error('Get all codes error:', error);
+    res.status(500).json({ error: 'Failed to get codes' });
+  }
+});
+
+// ---------- GET CODE USAGE ----------
+
+app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    const usage = await db.getCodeUsage(code);
+    res.json(usage);
+  } catch (error) {
+    console.error('Code usage error:', error);
+    res.status(500).json({ error: 'Failed to get code usage' });
+  }
+});
+
+// ---------- DEACTIVATE CODE ----------
+// Deactivates code and removes from active list
+
+app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    // Get all devices using this code
+    const devices = await db.all(
+      `SELECT device_id FROM devices WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Revoke all devices
+    for (const device of devices) {
+      await db.run(
+        `UPDATE devices 
+         SET status = 'revoked', 
+             revoked_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE device_id = ?`,
+        [device.device_id]
       );
-    } catch (error) {
-      console.error('Logging error:', error);
-    }
-  }
-
-  async getUsageLogs(deviceId = null, limit = 100) {
-    let query = 'SELECT * FROM usage_logs';
-    const params = [];
-    
-    if (deviceId) {
-      query += ' WHERE device_id = ?';
-      params.push(deviceId);
     }
     
-    query += ' ORDER BY created_at DESC LIMIT ?';
-    params.push(limit);
+    // Reset used_count to 0 and set inactive
+    await db.run(
+      `UPDATE codes SET used_count = 0, is_active = 0 WHERE code = ?`,
+      [code]
+    );
     
-    return await this.all(query, params);
+    // Log the action
+    await db.logUsage('admin', code, 'code_deactivated', 
+      `Code ${code} deactivated by ${req.session.username}, ${devices.length} devices revoked`);
+    
+    res.json({ 
+      success: true, 
+      message: `Code deactivated and ${devices.length} devices revoked`,
+      devicesRevoked: devices.length
+    });
+  } catch (error) {
+    console.error('Deactivate code error:', error);
+    res.status(500).json({ error: 'Failed to deactivate code' });
   }
+});
 
-  async getStats() {
-    const total = await this.get('SELECT COUNT(*) as count FROM devices');
-    const pending = await this.get("SELECT COUNT(*) as count FROM devices WHERE status = 'pending'");
-    const approved = await this.get("SELECT COUNT(*) as count FROM devices WHERE status = 'approved'");
-    const revoked = await this.get("SELECT COUNT(*) as count FROM devices WHERE status = 'revoked'");
-    const totalPings = await this.get('SELECT SUM(ping_count) as total FROM devices');
-    const totalCodes = await this.get('SELECT COUNT(*) as count FROM codes');
-    const activeCodes = await this.get("SELECT COUNT(*) as count FROM codes WHERE is_active = 1");
-    const pendingRequests = await this.get("SELECT COUNT(*) as count FROM requests WHERE status = 'pending'");
+// ---------- DELETE CODE (FULL REMOVE) ----------
 
-    return {
-      total: total.count,
-      pending: pending.count,
-      approved: approved.count,
-      revoked: revoked.count,
-      totalPings: totalPings.total || 0,
-      totalCodes: totalCodes.count,
-      activeCodes: activeCodes.count,
-      pendingRequests: pendingRequests.count
-    };
+app.delete('/api/code/:code', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    // First revoke all devices
+    await db.run(
+      `UPDATE devices 
+       SET status = 'revoked', 
+           revoked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE code = ? AND status != 'revoked'`,
+      [code]
+    );
+    
+    // Then delete the code
+    const result = await db.run(
+      `DELETE FROM codes WHERE code = ?`,
+      [code]
+    );
+    
+    if (result.changes > 0) {
+      await db.logUsage('admin', code, 'code_deleted', 
+        `Code ${code} deleted by ${req.session.username}`);
+      
+      res.json({ 
+        success: true, 
+        message: `Code ${code} deleted and all associated devices revoked` 
+      });
+    } else {
+      res.status(404).json({ error: 'Code not found' });
+    }
+  } catch (error) {
+    console.error('Delete code error:', error);
+    res.status(500).json({ error: 'Failed to delete code' });
   }
+});
 
-  async createAdmin(username, passwordHash) {
-    try {
-      const result = await this.run(
-        `INSERT OR REPLACE INTO admins (username, password_hash)
-         VALUES (?, ?)`,
-        [username, passwordHash]
+// ---------- REACTIVATE CODE ----------
+
+app.post('/api/code/:code/reactivate', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  
+  try {
+    await db.run(
+      `UPDATE codes SET is_active = 1 WHERE code = ?`,
+      [code]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: `Code ${code} reactivated` 
+    });
+  } catch (error) {
+    console.error('Reactivate code error:', error);
+    res.status(500).json({ error: 'Failed to reactivate code' });
+  }
+});
+
+// ---------- EXTEND CODE ----------
+
+app.post('/api/code/:code/extend', isApiAuthenticated, async (req, res) => {
+  const { code } = req.params;
+  const { maxDevices } = req.body;
+  
+  if (!maxDevices || maxDevices < 1) {
+    return res.status(400).json({ error: 'maxDevices is required and must be > 0' });
+  }
+  
+  try {
+    // Reactivate if inactive
+    await db.run(
+      `UPDATE codes SET is_active = 1 WHERE code = ?`,
+      [code]
+    );
+    
+    const success = await db.extendCode(code, maxDevices);
+    if (success) {
+      await db.logUsage('admin', code, 'code_extended', 
+        `Code ${code} extended to ${maxDevices} devices by ${req.session.username}`);
+      
+      res.json({ success: true, message: `Code extended to ${maxDevices} devices` });
+    } else {
+      res.status(404).json({ error: 'Code not found' });
+    }
+  } catch (error) {
+    console.error('Extend code error:', error);
+    res.status(500).json({ error: 'Failed to extend code' });
+  }
+});
+
+// ---------- DELETE DEVICE (FULL REMOVE - Called by extension) ----------
+
+app.delete('/api/device/:deviceId', async (req, res) => {
+  const { deviceId } = req.params;
+  
+  console.log(`🗑️ DELETE request for device: ${deviceId}`);
+  
+  try {
+    const device = await db.getDevice(deviceId);
+    if (!device) {
+      console.log(`❌ Device not found: ${deviceId}`);
+      return res.status(404).json({ error: 'Device not found' });
+    }
+    
+    const code = device.code;
+    console.log(`📋 Device found with code: ${code}`);
+    
+    // Delete the device
+    const result = await db.run(
+      `DELETE FROM devices WHERE device_id = ?`,
+      [deviceId]
+    );
+    
+    if (result.changes > 0) {
+      // Update code used_count
+      if (code) {
+        await db.run(
+          `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
+          [code]
+        );
+        console.log(`✅ Updated code ${code} used_count`);
+      }
+      
+      await db.logUsage(deviceId, code, 'remove_user', 'User removed from extension');
+      
+      console.log(`✅ Device ${deviceId} removed successfully`);
+      
+      res.json({ 
+        success: true, 
+        message: `User removed, slot freed. Device will need to re-enter code.`,
+        deviceId: deviceId,
+        code: code
+      });
+    } else {
+      res.status(404).json({ error: 'Failed to remove device' });
+    }
+  } catch (error) {
+    console.error('Remove user error:', error);
+    res.status(500).json({ error: 'Failed to remove user' });
+  }
+});
+
+// ---------- REACTIVATE DEVICE ----------
+
+app.post('/api/reactivate/:deviceId', isApiAuthenticated, async (req, res) => {
+  const { deviceId } = req.params;
+  
+  try {
+    const result = await db.reactivateDevice(deviceId);
+    if (result && result.success !== false) {
+      await db.logUsage(deviceId, null, 'reactivate', 
+        `Device reactivated by admin ${req.session.username}`);
+      res.json({ success: true, message: `Device reactivated` });
+    } else if (result && result.error) {
+      res.status(400).json({ error: result.error });
+    } else {
+      res.status(404).json({ error: 'Device not found' });
+    }
+  } catch (error) {
+    console.error('Reactivate error:', error);
+    res.status(500).json({ error: 'Failed to reactivate device' });
+  }
+});
+
+// ---------- ASSIGN DEVICE TO CODE ----------
+
+app.post('/api/device/:deviceId/assign-code', isApiAuthenticated, async (req, res) => {
+  const { deviceId } = req.params;
+  const { code } = req.body;
+  
+  if (!code) {
+    return res.status(400).json({ error: 'Code is required' });
+  }
+  
+  try {
+    const codeInfo = await db.getCodeInfo(code);
+    if (!codeInfo) {
+      return res.status(404).json({ error: 'Code not found' });
+    }
+    
+    if (!codeInfo.is_active) {
+      return res.status(400).json({ error: 'Code is inactive' });
+    }
+    
+    const device = await db.getDevice(deviceId);
+    if (!device) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+    
+    const usage = await db.getCodeUsage(code);
+    if (usage.used >= usage.max) {
+      return res.status(400).json({ error: 'Code limit reached' });
+    }
+    
+    if (device.code && device.code !== code) {
+      await db.run(
+        `UPDATE codes SET used_count = used_count - 1 WHERE code = ?`,
+        [device.code]
       );
-      return result;
-    } catch (error) {
-      console.error('Create admin error:', error);
-      return null;
     }
+    
+    await db.run(
+      `UPDATE devices 
+       SET code = ?, 
+           status = 'approved',
+           approved_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE device_id = ?`,
+      [code, deviceId]
+    );
+    
+    await db.run(
+      `UPDATE codes SET used_count = used_count + 1 WHERE code = ?`,
+      [code]
+    );
+    
+    await db.logUsage(deviceId, code, 'assign_code', 
+      `Device assigned to code by admin ${req.session.username}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Device assigned to code: ${code}` 
+    });
+  } catch (error) {
+    console.error('Assign device error:', error);
+    res.status(500).json({ error: 'Failed to assign device' });
   }
+});
 
-  async getAdmin(username) {
-    try {
-      return await this.get(`SELECT * FROM admins WHERE username = ?`, [username]);
-    } catch (error) {
-      console.error('Get admin error:', error);
-      return null;
+// ---------- REQUEST MORE SLOTS ----------
+
+app.post('/api/request', async (req, res) => {
+  const { deviceId, code, reason } = req.body;
+  
+  if (!deviceId) {
+    return res.status(400).json({ error: 'Device ID is required' });
+  }
+  
+  try {
+    const result = await db.createRequest(deviceId, code || null, reason || '');
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        requestId: result.id,
+        message: 'Request submitted successfully'
+      });
+    } else {
+      res.status(400).json({ error: result.error });
     }
+  } catch (error) {
+    console.error('Request error:', error);
+    res.status(500).json({ error: 'Failed to submit request' });
   }
+});
 
-  close() {
-    this.db.close();
+// ---------- GET ALL REQUESTS ----------
+
+app.get('/api/requests', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.getAllRequests();
+    res.json(requests);
+  } catch (error) {
+    console.error('Get requests error:', error);
+    res.status(500).json({ error: 'Failed to get requests' });
+  }
+});
+
+// ---------- GET PENDING REQUESTS ----------
+
+app.get('/api/requests/pending', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.getPendingRequests();
+    res.json(requests);
+  } catch (error) {
+    console.error('Get pending requests error:', error);
+    res.status(500).json({ error: 'Failed to get pending requests' });
+  }
+});
+
+// ---------- GET PENDING CODE REQUESTS ----------
+
+app.get('/api/requests/code', isApiAuthenticated, async (req, res) => {
+  try {
+    const requests = await db.getPendingCodeRequests();
+    res.json(requests);
+  } catch (error) {
+    console.error('Get code requests error:', error);
+    res.status(500).json({ error: 'Failed to get code requests' });
+  }
+});
+
+// ---------- RESPOND TO REQUEST ----------
+
+app.post('/api/request/:requestId/respond', isApiAuthenticated, async (req, res) => {
+  const { requestId } = req.params;
+  const { status, response } = req.body;
+  
+  if (!status || !['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be "approved" or "rejected"' });
+  }
+  
+  try {
+    const success = await db.respondToRequest(requestId, status, response || '');
+    if (success) {
+      if (status === 'rejected') {
+        await db.run(`DELETE FROM requests WHERE id = ?`, [requestId]);
+      }
+      res.json({ success: true, message: `Request ${status}` });
+    } else {
+      res.status(404).json({ error: 'Request not found' });
+    }
+  } catch (error) {
+    console.error('Respond to request error:', error);
+    res.status(500).json({ error: 'Failed to respond to request' });
+  }
+});
+
+// ---------- GET STATS ----------
+
+app.get('/api/stats', isApiAuthenticated, async (req, res) => {
+  try {
+    const stats = await db.getStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+// ---------- GET LOGS ----------
+
+app.get('/api/logs', isApiAuthenticated, async (req, res) => {
+  try {
+    const { deviceId, limit = 100 } = req.query;
+    const logs = await db.getUsageLogs(deviceId, parseInt(limit));
+    res.json(logs);
+  } catch (error) {
+    console.error('Logs error:', error);
+    res.status(500).json({ error: 'Failed to get logs' });
+  }
+});
+
+// ---------- GET DASHBOARD DATA ----------
+
+app.get('/api/dashboard-data', isApiAuthenticated, async (req, res) => {
+  try {
+    const devices = await db.getDevices();
+    const stats = await db.getStats();
+    const codes = await db.getActiveCodes();
+    const pendingRequests = await db.getPendingRequests();
+    const codeRequests = await db.getPendingCodeRequests();
+    
+    res.json({
+      stats,
+      devices,
+      codes,
+      requests: pendingRequests,
+      codeRequests: codeRequests,
+      username: req.session.username
+    });
+  } catch (error) {
+    console.error('Dashboard data error:', error);
+    res.status(500).json({ error: 'Failed to load dashboard data' });
+  }
+});
+
+// ============================================
+// CREATE DEFAULT ADMIN
+// ============================================
+
+async function createDefaultAdmin() {
+  try {
+    const username = process.env.ADMIN_USERNAME || 'admin';
+    const password = process.env.ADMIN_PASSWORD || 'password123';
+    
+    const existing = await db.getAdmin(username);
+    if (!existing) {
+      const hash = await bcrypt.hash(password, 10);
+      await db.createAdmin(username, hash);
+      console.log(`✅ Default admin created: ${username}`);
+      console.log(`🔑 Password: ${password}`);
+    } else {
+      console.log(`✅ Admin already exists: ${username}`);
+    }
+  } catch (error) {
+    console.error('Failed to create default admin:', error);
   }
 }
 
-module.exports = new DeviceDatabase();
+// ============================================
+// START SERVER
+// ============================================
+
+createDefaultAdmin().then(() => {
+  app.listen(PORT, () => {
+    console.log('\n' + '='.repeat(50));
+    console.log('🚀 Server is running!');
+    console.log('='.repeat(50));
+    console.log(`📡 URL: http://localhost:${PORT}`);
+    console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
+    console.log(`🔑 Username: ${process.env.ADMIN_USERNAME || 'admin'}`);
+    console.log(`🔒 Password: ${process.env.ADMIN_PASSWORD || 'password123'}`);
+    console.log('='.repeat(50));
+    console.log('⚠️  IMPORTANT: Change your password in Render env vars!');
+    console.log('='.repeat(50) + '\n');
+  });
+});
+
+module.exports = app;

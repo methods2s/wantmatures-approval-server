@@ -176,7 +176,7 @@ class DeviceDatabase {
   }
 
   async deactivateCode(code) {
-    // First, revoke all devices using this code
+    // Revoke all devices using this code
     await this.run(
       `UPDATE devices 
        SET status = 'revoked', 
@@ -186,7 +186,7 @@ class DeviceDatabase {
       [code]
     );
     
-    // Then deactivate the code
+    // Deactivate the code
     const result = await this.run(
       `UPDATE codes SET is_active = 0, used_count = 0 WHERE code = ?`,
       [code]
@@ -200,7 +200,7 @@ class DeviceDatabase {
   }
 
   async deleteCode(code) {
-    // First revoke all devices
+    // Revoke all devices
     await this.run(
       `UPDATE devices 
        SET status = 'revoked', 
@@ -210,7 +210,7 @@ class DeviceDatabase {
       [code]
     );
     
-    // Then delete the code
+    // Delete the code
     const result = await this.run(
       `DELETE FROM codes WHERE code = ?`,
       [code]
@@ -402,7 +402,6 @@ class DeviceDatabase {
     return await this.all(`SELECT * FROM devices WHERE code = ? ORDER BY created_at DESC`, [code]);
   }
 
-  // REMOVE USER - DELETES device completely, frees slot
   async removeUser(deviceId) {
     const device = await this.getDevice(deviceId);
     if (!device) return false;
