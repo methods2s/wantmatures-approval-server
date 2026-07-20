@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: wantmatures-approval-server
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://wantmatures_user:CWSWZCkVncc7RUu74TLwBFig5zeQWRRZ@dpg-d9f8ts1kh4rs7380h9sg-a.singapore-postgres.render.com/wantmatures
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: YourSecurePassword123!
+      - key: SESSION_SECRET
+        value: my-super-secret-key-12345
+      - key: PORT
+        value: 3000
