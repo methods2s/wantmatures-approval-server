@@ -1,0 +1,217 @@
+{
+  "admins": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "$2b$10$Un0NAquZ.D0hrLXSBBubs.nM.Ev2Lmfxq/iaIqys8ourAHWG/OIOG",
+      "created_at": "2026-07-20T20:55:36.498Z"
+    }
+  ],
+  "codes": [
+    {
+      "code": "1T31-S3Z3",
+      "max_devices": 10,
+      "used_count": 0,
+      "is_active": false,
+      "created_by": "admin",
+      "created_at": "2026-07-20T20:55:45.250Z",
+      "notes": "For user: asd"
+    },
+    {
+      "code": "QA77-M4YO",
+      "max_devices": 10,
+      "used_count": 3,
+      "is_active": true,
+      "created_by": "admin",
+      "created_at": "2026-07-20T21:38:38.235Z",
+      "notes": "For user: 1"
+    },
+    {
+      "code": "P8K7-W5PH",
+      "max_devices": 10,
+      "used_count": 0,
+      "is_active": true,
+      "created_by": "admin",
+      "created_at": "2026-07-20T20:57:08.950Z",
+      "notes": "For user: asd"
+    }
+  ],
+  "devices": [
+    {
+      "id": 4,
+      "device_id": "wm_Mozilla50Windows_mrtd0bge_mky91r",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+      "ip_address": "10.27.53.4",
+      "browser_info": "{\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36\",\"platform\":\"Win32\",\"language\":\"fr\",\"timestamp\":\"2026-07-20T22:47:01.990Z\"}",
+      "code": "QA77-M4YO",
+      "status": "approved",
+      "approved_at": "2026-07-20T21:47:03.719Z",
+      "revoked_at": null,
+      "last_ping": "2026-07-20T21:57:04.094Z",
+      "ping_count": 65,
+      "created_at": "2026-07-20T21:39:40.952Z",
+      "updated_at": "2026-07-20T21:57:04.094Z"
+    },
+    {
+      "id": 5,
+      "device_id": "wm_Mozilla50Windows_mrtc9s4h_ffmsiu",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+      "ip_address": "10.27.53.4",
+      "browser_info": "{\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36\",\"platform\":\"Win32\",\"language\":\"nl\",\"timestamp\":\"2026-07-20T22:45:36.478Z\"}",
+      "code": "QA77-M4YO",
+      "status": "approved",
+      "approved_at": "2026-07-20T21:45:38.232Z",
+      "revoked_at": null,
+      "last_ping": "2026-07-20T21:57:11.194Z",
+      "ping_count": 65,
+      "created_at": "2026-07-20T21:39:43.750Z",
+      "updated_at": "2026-07-20T21:57:11.194Z"
+    },
+    {
+      "id": 3,
+      "device_id": "wm_Mozilla50Windows_mrtd7h1q_zi3sxo",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+      "ip_address": "10.28.120.5",
+      "browser_info": "{\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36\",\"platform\":\"Win32\",\"language\":\"en\",\"timestamp\":\"2026-07-20T22:47:05.438Z\"}",
+      "code": "QA77-M4YO",
+      "status": "approved",
+      "approved_at": "2026-07-20T21:47:07.333Z",
+      "revoked_at": null,
+      "last_ping": "2026-07-20T21:57:13.475Z",
+      "ping_count": 60,
+      "created_at": "2026-07-20T21:39:37.139Z",
+      "updated_at": "2026-07-20T21:57:13.475Z"
+    }
+  ],
+  "requests": [],
+  "usage_logs": [
+    {
+      "id": 1,
+      "device_id": "asd",
+      "code": "1T31-S3Z3",
+      "action": "code_generated",
+      "details": "Code 1T31-S3Z3 generated for asd by admin",
+      "created_at": "2026-07-20T20:55:45.363Z"
+    },
+    {
+      "id": 2,
+      "device_id": "admin",
+      "code": "1T31-S3Z3",
+      "action": "code_deactivated",
+      "details": "Code 1T31-S3Z3 deactivated by admin, 0 devices revoked",
+      "created_at": "2026-07-20T20:55:49.699Z"
+    },
+    {
+      "id": 3,
+      "device_id": "asd",
+      "code": "P8K7-W5PH",
+      "action": "code_generated",
+      "details": "Code P8K7-W5PH generated for asd by admin",
+      "created_at": "2026-07-20T20:57:09.085Z"
+    },
+    {
+      "id": 4,
+      "device_id": "device001",
+      "code": "P8K7-W5PH",
+      "action": "register",
+      "details": "Device registered and auto-approved",
+      "created_at": "2026-07-20T21:04:30.593Z"
+    },
+    {
+      "id": 5,
+      "device_id": "device001",
+      "code": "P8K7-W5PH",
+      "action": "re-register",
+      "details": "Device re-registered",
+      "created_at": "2026-07-20T21:05:01.916Z"
+    },
+    {
+      "id": 6,
+      "device_id": "device001",
+      "code": "P8K7-W5PH",
+      "action": "remove_user",
+      "details": "User removed from extension",
+      "created_at": "2026-07-20T21:31:39.702Z"
+    },
+    {
+      "id": 7,
+      "device_id": "wm_Mozilla50Windows_mrryphz8_7kyk45",
+      "code": "P8K7-W5PH",
+      "action": "register",
+      "details": "Device registered and auto-approved",
+      "created_at": "2026-07-20T21:31:46.416Z"
+    },
+    {
+      "id": 8,
+      "device_id": "1",
+      "code": "QA77-M4YO",
+      "action": "code_generated",
+      "details": "Code QA77-M4YO generated for 1 by admin",
+      "created_at": "2026-07-20T21:38:38.240Z"
+    },
+    {
+      "id": 9,
+      "device_id": "wm_Mozilla50Windows_mrtd7h1q_zi3sxo",
+      "code": "QA77-M4YO",
+      "action": "register",
+      "details": "Device registered and auto-approved",
+      "created_at": "2026-07-20T21:39:37.143Z"
+    },
+    {
+      "id": 10,
+      "device_id": "wm_Mozilla50Windows_mrtd0bge_mky91r",
+      "code": "QA77-M4YO",
+      "action": "register",
+      "details": "Device registered and auto-approved",
+      "created_at": "2026-07-20T21:39:41.054Z"
+    },
+    {
+      "id": 11,
+      "device_id": "wm_Mozilla50Windows_mrtc9s4h_ffmsiu",
+      "code": "QA77-M4YO",
+      "action": "register",
+      "details": "Device registered and auto-approved",
+      "created_at": "2026-07-20T21:39:43.754Z"
+    },
+    {
+      "id": 12,
+      "device_id": "wm_Mozilla50Windows_mrryphz8_7kyk45",
+      "code": "P8K7-W5PH",
+      "action": "remove_user",
+      "details": "User removed from extension",
+      "created_at": "2026-07-20T21:44:28.591Z"
+    },
+    {
+      "id": 13,
+      "device_id": "wm_Mozilla50Windows_mrtc9s4h_ffmsiu",
+      "code": "QA77-M4YO",
+      "action": "re-register",
+      "details": "Device re-registered",
+      "created_at": "2026-07-20T21:45:38.234Z"
+    },
+    {
+      "id": 14,
+      "device_id": "wm_Mozilla50Windows_mrtd7h1q_zi3sxo",
+      "code": "QA77-M4YO",
+      "action": "re-register",
+      "details": "Device re-registered",
+      "created_at": "2026-07-20T21:45:41.140Z"
+    },
+    {
+      "id": 15,
+      "device_id": "wm_Mozilla50Windows_mrtd0bge_mky91r",
+      "code": "QA77-M4YO",
+      "action": "re-register",
+      "details": "Device re-registered",
+      "created_at": "2026-07-20T21:47:03.721Z"
+    },
+    {
+      "id": 16,
+      "device_id": "wm_Mozilla50Windows_mrtd7h1q_zi3sxo",
+      "code": "QA77-M4YO",
+      "action": "re-register",
+      "details": "Device re-registered",
+      "created_at": "2026-07-20T21:47:07.335Z"
+    }
+  ]
+}
