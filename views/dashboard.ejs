@@ -1,508 +1,811 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard - Wantmatures Approval</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px}
-    .container{max-width:1400px;margin:0 auto}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;background:#161b22;border-radius:10px;border:1px solid #30363d;margin-bottom:20px}
-    .header h1{font-size:22px;color:#f0f6fc}
-    .header .user{color:#8b949e;font-size:14px}
-    .header .user span{color:#f0f6fc}
-    .logout-btn{background:#da3633;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
-    .logout-btn:hover{background:#f85149}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-    .stat-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:15px;text-align:center}
-    .stat-card .number{font-size:28px;font-weight:bold;color:#f0f6fc}
-    .stat-card .label{font-size:12px;color:#8b949e;margin-top:4px}
-    .stat-card .number.green{color:#3fb950}
-    .stat-card .number.orange{color:#d29922}
-    .stat-card .number.red{color:#f85149}
-    .stat-card .number.blue{color:#58a6ff}
-    .stat-card .number.purple{color:#bc8cff}
-    .section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;margin-bottom:20px}
-    .section h2{font-size:16px;color:#f0f6fc;margin-bottom:15px}
-    .section h2 .badge{background:#1f6feb;color:#fff;font-size:11px;padding:2px 10px;border-radius:12px;margin-left:8px}
-    .section h2 .badge.orange{background:#d29922}
-    .section h2 .badge.red{background:#da3633}
-    .code-gen{background:#0d1117;padding:15px;border-radius:8px;border:1px solid #30363d;margin-bottom:15px}
-    .code-gen h3{color:#f0f6fc;font-size:14px;margin-bottom:10px}
-    .code-gen .gen-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
-    .code-gen .gen-field{flex:1;min-width:150px}
-    .code-gen .gen-field label{color:#8b949e;font-size:12px;display:block;margin-bottom:4px}
-    .code-gen .gen-field input{width:100%;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#f0f6fc;font-size:13px}
-    .code-gen .gen-field input:focus{outline:none;border-color:#58a6ff}
-    .code-gen .gen-btn{padding:8px 24px;background:#238636;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px}
-    .code-gen .gen-btn:hover{background:#2ea043}
-    .code-gen .gen-btn:disabled{opacity:0.5;cursor:not-allowed}
-    .code-gen .gen-result{margin-top:10px;font-size:13px;font-family:monospace;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:4px;min-height:30px}
-    table{width:100%;border-collapse:collapse;font-size:13px}
-    th{text-align:left;padding:10px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:600}
-    td{padding:10px 12px;border-bottom:1px solid #21262d;vertical-align:middle}
-    tr:hover{background:#1c2128}
-    .status-badge{display:inline-block;padding:2px 12px;border-radius:12px;font-size:11px;font-weight:600}
-    .status-badge.approved{background:#23863633;color:#3fb950}
-    .status-badge.pending{background:#d2992233;color:#d29922}
-    .status-badge.revoked{background:#da363333;color:#f85149}
-    .status-badge.not_found{background:#8b949e33;color:#8b949e}
-    .btn-sm{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin:2px}
-    .btn-sm:hover{background:#30363d}
-    .btn-sm.approve{background:#238636;border-color:#238636;color:#fff}
-    .btn-sm.approve:hover{background:#2ea043}
-    .btn-sm.revoke{background:#da3633;border-color:#da3633;color:#fff}
-    .btn-sm.revoke:hover{background:#f85149}
-    .btn-sm.remove{background:#8b949e;border-color:#8b949e;color:#fff}
-    .btn-sm.remove:hover{background:#6e7681}
-    .btn-sm.reactivate{background:#1f6feb;border-color:#1f6feb;color:#fff}
-    .btn-sm.reactivate:hover{background:#388bfd}
-    .btn-sm.extend{background:#1f6feb;border-color:#1f6feb;color:#fff}
-    .btn-sm.extend:hover{background:#388bfd}
-    .btn-sm.edit{background:#d29922;border-color:#d29922;color:#fff}
-    .btn-sm.edit:hover{background:#e6a700}
-    .empty{color:#8b949e;text-align:center;padding:20px}
-    .request-item{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
-    .request-item .info{flex:1}
-    .request-item .info .device{font-weight:bold;color:#f0f6fc}
-    .request-item .info .code{color:#58a6ff;font-family:monospace}
-    .request-item .info .reason{color:#8b949e;font-size:12px;margin-top:2px}
-    .request-item .info .time{font-size:10px;color:#8b949e;margin-top:2px}
-    .request-item .actions{display:flex;gap:6px}
-    .tabs{display:flex;gap:4px;margin-bottom:15px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-    .tab{padding:8px 16px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent;font-size:13px}
-    .tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
-    .tab:hover{color:#f0f6fc}
-    .tab-content{display:none}
-    .tab-content.active{display:block}
-    .limit-full{color:#d29922;font-size:11px;font-weight:bold}
-    .auto-approve-badge{background:#23863633;color:#3fb950;padding:2px 10px;border-radius:12px;font-size:10px;display:inline-block}
-    @media(max-width:768px){.header{flex-wrap:wrap;gap:10px}.code-gen .gen-row{flex-direction:column;align-items:stretch}.code-gen .gen-field{min-width:auto}table{font-size:11px}td,th{padding:6px 8px}}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Dating Sites Extension</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #2a2a3e;
+            margin-bottom: 25px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #fff;
+        }
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header .user-info span {
+            color: #888;
+        }
+        .header .user-info a {
+            color: #ff6b6b;
+            text-decoration: none;
+            padding: 6px 14px;
+            border: 1px solid #ff6b6b;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .header .user-info a:hover {
+            background: #ff6b6b;
+            color: #fff;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background: #1a1a2e;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid #2a2a3e;
+            text-align: center;
+        }
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .stat-card .number.pending { color: #FF9800; }
+        .stat-card .number.revoked { color: #f44336; }
+        .stat-card .number.active { color: #4CAF50; }
+        
+        .section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #2a2a3e;
+        }
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section h2 .badge {
+            font-size: 12px;
+            padding: 2px 10px;
+            border-radius: 12px;
+            background: #2a2a3e;
+            color: #888;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0f0f1a;
+            border: 1px solid #2a2a3e;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #4CAF50;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #45a049;
+        }
+        .btn-danger {
+            background: #f44336;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+        .btn-warning {
+            background: #FF9800;
+            color: #fff;
+        }
+        .btn-warning:hover {
+            background: #e68900;
+        }
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 12px;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #0f0f1a;
+            color: #888;
+            font-weight: 600;
+            border-bottom: 1px solid #2a2a3e;
+        }
+        table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        table tr:hover td {
+            background: #1a1a2e;
+        }
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .status-badge.approved { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .status-badge.pending { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+        .status-badge.revoked { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        .status-badge.active { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .status-badge.inactive { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        .status-badge.not_found { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        
+        .code-text {
+            font-family: monospace;
+            font-weight: bold;
+            color: #4CAF50;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+        .text-muted { color: #666; }
+        .text-success { color: #4CAF50; }
+        .text-danger { color: #f44336; }
+        .mt-2 { margin-top: 10px; }
+        .mb-2 { margin-bottom: 10px; }
+        .alert {
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        .alert-success {
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid #4CAF50;
+            color: #4CAF50;
+        }
+        .alert-danger {
+            background: rgba(244, 67, 54, 0.15);
+            border: 1px solid #f44336;
+            color: #f44336;
+        }
+        .alert-info {
+            background: rgba(33, 150, 243, 0.15);
+            border: 1px solid #2196F3;
+            color: #2196F3;
+        }
+        .flex { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .gap-2 { gap: 8px; }
+        .hidden { display: none !important; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 15px;
+            background: #0f0f1a;
+            padding: 4px;
+            border-radius: 8px;
+        }
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #888;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: #2a2a3e;
+            color: #fff;
+        }
+        .tab-btn:hover {
+            color: #fff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+            }
+            .header {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <h1>🔐 Approval Dashboard <span class="auto-approve-badge">⚡ AUTO-APPROVE</span></h1>
-    <div>
-      <span class="user">👤 <span><%= username %></span></span>
-      <form action="/logout" method="GET" style="display:inline">
-        <button type="submit" class="logout-btn">Logout</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat-card"><div class="number"><%= stats.total %></div><div class="label">Total Devices</div></div>
-    <div class="stat-card"><div class="number orange"><%= stats.pending %></div><div class="label">Pending</div></div>
-    <div class="stat-card"><div class="number green"><%= stats.approved %></div><div class="label">Auto-Approved</div></div>
-    <div class="stat-card"><div class="number red"><%= stats.revoked %></div><div class="label">Revoked</div></div>
-    <div class="stat-card"><div class="number blue"><%= stats.totalCodes %></div><div class="label">Codes</div></div>
-    <div class="stat-card"><div class="number purple"><%= stats.pendingRequests %></div><div class="label">Pending Code Requests</div></div>
-  </div>
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" data-tab="devices">📱 Devices</div>
-    <div class="tab" data-tab="codes">🔑 Codes <% if (stats.totalCodes > 0) { %><span class="badge"><%= stats.totalCodes %></span><% } %></div>
-    <div class="tab" data-tab="coderequests">📨 Code Requests <% if (codeRequests && codeRequests.length > 0) { %><span class="badge orange"><%= codeRequests.length %></span><% } %></div>
-  </div>
-
-  <!-- ==================== TAB: DEVICES ==================== -->
-  <div id="tab-devices" class="tab-content active">
-    <div class="section">
-      <h2>📱 Devices <span class="badge"><%= devices.length %></span></h2>
-      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Devices are auto-approved when they enter a valid code.</p>
-      <% if (devices.length === 0) { %>
-        <div class="empty">No devices registered yet.</div>
-      <% } else { %>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Device ID</th>
-                <th>Code</th>
-                <th>Status</th>
-                <th>Pings</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% devices.forEach(device => { %>
-                <tr>
-                  <td style="font-family:monospace;font-size:11px"><%= device.device_id ? device.device_id.substring(0,20) + '…' : 'Unknown' %></td>
-                  <td style="font-family:monospace;color:#58a6ff"><%= device.code || '—' %></td>
-                  <td><span class="status-badge <%= device.status %>"><%= device.status %></span></td>
-                  <td><%= device.ping_count || 0 %></td>
-                  <td style="font-size:11px"><%= new Date(device.created_at).toLocaleDateString() %></td>
-                  <td>
-                    <button class="btn-sm remove" onclick="removeUser('<%= device.device_id %>')">🗑️ Remove</button>
-                    <button class="btn-sm edit" onclick="editDevice('<%= device.device_id %>')">✏️ Edit</button>
-                    <% if (device.status === 'revoked') { %>
-                      <button class="btn-sm reactivate" onclick="reactivateDevice('<%= device.device_id %>')">Reactivate</button>
-                    <% } %>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-    </div>
-  </div>
-
-  <!-- ==================== TAB: CODES ==================== -->
-  <div id="tab-codes" class="tab-content">
-    <div class="section">
-      <h2>🔑 Activation Codes <span class="badge"><%= codes.length %></span></h2>
-      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">⚡ Users enter these codes and are auto-approved instantly.</p>
-      
-      <!-- SIMPLIFIED CODE GENERATION -->
-      <div class="code-gen">
-        <h3>🚀 Generate New Code</h3>
-        <div class="gen-row">
-          <div class="gen-field">
-            <label>👤 Username</label>
-            <input type="text" id="gen-username" placeholder="Enter username" autocomplete="off">
-          </div>
-          <div class="gen-field" style="min-width:120px;flex:0.5;">
-            <label>📊 Max Devices</label>
-            <input type="number" id="gen-max-devices" value="10" min="1" max="100">
-          </div>
-          <button class="gen-btn" id="gen-btn" onclick="generateCodeSimple()">🚀 Generate</button>
-        </div>
-        <div class="gen-result" id="gen-result">Enter a username and click Generate</div>
-      </div>
-
-      <% if (codes.length === 0) { %>
-        <div class="empty">No codes generated yet.</div>
-      <% } else { %>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Used / Max</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% codes.forEach(code => { 
-                const usage = code.used_count || 0;
-                const max = code.max_devices || 10;
-                const isFull = usage >= max;
-              %>
-                <tr>
-                  <td style="font-family:monospace;font-size:16px;color:#58a6ff;letter-spacing:1px"><%= code.code %></td>
-                  <td><%= usage %> / <%= max %> <% if (isFull) { %> <span class="limit-full">🔴 FULL</span><% } %></td>
-                  <td><span class="status-badge <%= code.is_active ? 'approved' : 'revoked' %>"><%= code.is_active ? 'Active' : 'Inactive' %></span></td>
-                  <td style="font-size:11px"><%= new Date(code.created_at).toLocaleDateString() %></td>
-                  <td style="font-size:11px;color:#8b949e"><%= code.notes || '—' %></td>
-                  <td>
-                    <% if (code.is_active) { %>
-                      <button class="btn-sm revoke" onclick="deactivateCode('<%= code.code %>')">Deactivate</button>
-                      <button class="btn-sm extend" onclick="extendCode('<%= code.code %>')">Extend</button>
-                    <% } %>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-    </div>
-  </div>
-
-  <!-- ==================== TAB: CODE REQUESTS ==================== -->
-  <div id="tab-coderequests" class="tab-content">
-    <div class="section">
-      <h2>📨 Code Requests <span class="badge orange"><%= codeRequests ? codeRequests.length : 0 %></span></h2>
-      <p style="color:#8b949e;font-size:12px;margin-bottom:10px">Users requesting activation codes. Generate a code for them.</p>
-      
-      <% if (!codeRequests || codeRequests.length === 0) { %>
-        <div class="empty">No code requests.</div>
-      <% } else { %>
-        <% codeRequests.forEach(req => { %>
-          <div class="request-item">
-            <div class="info">
-              <div class="device">📱 <span style="font-family:monospace;font-size:12px"><%= req.device_id ? req.device_id.substring(0,20) + '…' : 'Unknown' %></span></div>
-              <div class="reason">💬 <%= req.reason || 'No reason provided' %></div>
-              <div class="time">📅 Requested: <%= new Date(req.requested_at).toLocaleString() %></div>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 Dating Sites Extension Admin</h1>
+            <div class="user-info">
+                <span>👤 <%= username %></span>
+                <a href="/logout">Logout</a>
             </div>
-            <div class="actions">
-              <button class="btn-sm approve" onclick="generateCodeForUser('<%= req.id %>', '<%= req.device_id %>')">🎯 Generate Code</button>
-              <button class="btn-sm revoke" onclick="rejectRequest('<%= req.id %>')">Reject</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="number"><%= stats.total || 0 %></div>
+                <div class="label">Total Devices</div>
             </div>
-          </div>
-        <% }) %>
-      <% } %>
+            <div class="stat-card">
+                <div class="number active"><%= stats.approved || 0 %></div>
+                <div class="label">Active</div>
+            </div>
+            <div class="stat-card">
+                <div class="number pending"><%= stats.pending || 0 %></div>
+                <div class="label">Pending</div>
+            </div>
+            <div class="stat-card">
+                <div class="number revoked"><%= stats.revoked || 0 %></div>
+                <div class="label">Revoked</div>
+            </div>
+            <div class="stat-card">
+                <div class="number"><%= stats.activeCodes || 0 %></div>
+                <div class="label">Active Codes</div>
+            </div>
+            <div class="stat-card">
+                <div class="number pending"><%= stats.pendingRequests || 0 %></div>
+                <div class="label">Pending Requests</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="codes">🔑 Codes</button>
+            <button class="tab-btn" data-tab="devices">📱 Devices</button>
+            <button class="tab-btn" data-tab="requests">📨 Requests</button>
+            <button class="tab-btn" data-tab="coderequests">📨 Code Requests</button>
+            <button class="tab-btn" data-tab="generate">➕ Generate Code</button>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TAB: CODES -->
+        <!-- ============================================ -->
+        <div class="tab-content active" id="tab-codes">
+            <div class="section">
+                <h2>🔑 Active Codes <span class="badge"><%= codes ? codes.length : 0 %></span></h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Used / Max</th>
+                                <th>Status</th>
+                                <th>Created By</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (codes && codes.length > 0) { %>
+                                <% codes.forEach(function(code) { %>
+                                    <tr>
+                                        <td><span class="code-text"><%= code.code %></span></td>
+                                        <td><%= code.used_count || 0 %> / <%= code.max_devices || 10 %></td>
+                                        <td><span class="status-badge active">Active</span></td>
+                                        <td><%= code.created_by || 'admin' %></td>
+                                        <td><%= new Date(code.created_at).toLocaleDateString() %></td>
+                                        <td>
+                                            <button class="btn btn-danger btn-sm" onclick="deactivateCode('<%= code.code %>')">Deactivate</button>
+                                            <button class="btn btn-warning btn-sm" onclick="extendCode('<%= code.code %>')">Extend</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            <% } else { %>
+                                <tr><td colspan="6" class="empty-state">No active codes found</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TAB: DEVICES -->
+        <!-- ============================================ -->
+        <div class="tab-content" id="tab-devices">
+            <div class="section">
+                <h2>📱 Devices <span class="badge"><%= devices ? devices.length : 0 %></span></h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Code</th>
+                                <th>Status</th>
+                                <th>Approved At</th>
+                                <th>Pings</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (devices && devices.length > 0) { %>
+                                <% devices.forEach(function(device) { %>
+                                    <tr>
+                                        <td><%= device.device_id %></td>
+                                        <td><span class="code-text"><%= device.code || 'N/A' %></span></td>
+                                        <td><span class="status-badge <%= device.status %>"><%= device.status %></span></td>
+                                        <td><%= device.approved_at ? new Date(device.approved_at).toLocaleDateString() : '-' %></td>
+                                        <td><%= device.ping_count || 0 %></td>
+                                        <td>
+                                            <% if (device.status === 'revoked') { %>
+                                                <button class="btn btn-primary btn-sm" onclick="reactivateDevice('<%= device.device_id %>')">Reactivate</button>
+                                            <% } %>
+                                            <button class="btn btn-danger btn-sm" onclick="removeDevice('<%= device.device_id %>')">Remove</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            <% } else { %>
+                                <tr><td colspan="6" class="empty-state">No devices found</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TAB: REQUESTS (More Slots) -->
+        <!-- ============================================ -->
+        <div class="tab-content" id="tab-requests">
+            <div class="section">
+                <h2>📨 More Slots Requests <span class="badge"><%= requests ? requests.length : 0 %></span></h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Code</th>
+                                <th>Reason</th>
+                                <th>Requested At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (requests && requests.length > 0) { %>
+                                <% requests.forEach(function(req) { %>
+                                    <tr>
+                                        <td><%= req.device_id %></td>
+                                        <td><span class="code-text"><%= req.code || 'N/A' %></span></td>
+                                        <td><%= req.reason || 'Need more slots' %></td>
+                                        <td><%= new Date(req.requested_at).toLocaleDateString() %></td>
+                                        <td>
+                                            <button class="btn btn-success btn-sm" onclick="approveRequest('<%= req.id %>')">Approve</button>
+                                            <button class="btn btn-danger btn-sm" onclick="rejectRequest('<%= req.id %>')">Reject</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            <% } else { %>
+                                <tr><td colspan="5" class="empty-state">No pending requests</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TAB: CODE REQUESTS -->
+        <!-- ============================================ -->
+        <div class="tab-content" id="tab-coderequests">
+            <div class="section">
+                <h2>📨 Code Requests <span class="badge"><%= codeRequests ? codeRequests.length : 0 %></span></h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Reason</th>
+                                <th>Requested At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (codeRequests && codeRequests.length > 0) { %>
+                                <% codeRequests.forEach(function(req) { %>
+                                    <tr>
+                                        <td><%= req.device_id %></td>
+                                        <td><%= req.reason || 'Requesting code' %></td>
+                                        <td><%= new Date(req.requested_at).toLocaleDateString() %></td>
+                                        <td>
+                                            <button class="btn btn-success btn-sm" onclick="generateCodeForUser('<%= req.device_id %>')">Generate Code</button>
+                                            <button class="btn btn-danger btn-sm" onclick="rejectCodeRequest('<%= req.id %>')">Reject</button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            <% } else { %>
+                                <tr><td colspan="4" class="empty-state">No pending code requests</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- TAB: GENERATE CODE - ONLY USERNAME -->
+        <!-- ============================================ -->
+        <div class="tab-content" id="tab-generate">
+            <div class="section">
+                <h2>➕ Generate Code</h2>
+                <p class="text-muted mb-2">Enter a username to generate a new activation code. The code will have a limit of 10 devices.</p>
+                
+                <form id="generateCodeForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Username (Device ID)</label>
+                            <input type="text" id="genUsername" class="form-control" placeholder="Enter username" required>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" style="width:100%;">Generate Code</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div id="generateResult" class="mt-2"></div>
+            </div>
+        </div>
+
     </div>
-  </div>
 
-  <div style="text-align:center;color:#8b949e;font-size:12px;margin-top:20px;border-top:1px solid #21262d;padding-top:15px">
-    Wantmatures Auto Clicker v5.9.0 • Auto-Approval System • ⚡ Instant Activation
-  </div>
-</div>
+    <script>
+        // ============================================
+        // TABS
+        // ============================================
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+            });
+        });
 
-<script>
-// ============================================
-// TAB SWITCHING
-// ============================================
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', function() {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    this.classList.add('active');
-    document.getElementById('tab-' + this.dataset.tab).classList.add('active');
-  });
-});
+        // ============================================
+        // GENERATE CODE - ONLY USERNAME
+        // ============================================
+        document.getElementById('generateCodeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = document.getElementById('genUsername').value.trim();
+            
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('generateResult');
+            resultDiv.innerHTML = '<div class="alert alert-info">⏳ Generating code...</div>';
+            
+            try {
+                const response = await fetch('/api/generate-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            ✅ Code generated: <strong>${data.code}</strong><br>
+                            Username: ${data.username}<br>
+                            Max devices: 10<br>
+                            Request removed from list.
+                        </div>
+                    `;
+                    document.getElementById('genUsername').value = '';
+                    // Refresh after 2 seconds
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    resultDiv.innerHTML = `<div class="alert alert-danger">❌ ${data.error || 'Failed to generate code'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="alert alert-danger">❌ Error: ${error.message}</div>`;
+            }
+        });
 
-// ============================================
-// API REQUEST HELPER
-// ============================================
-async function apiRequest(url, method = 'GET', data = null) {
-  const options = { 
-    method, 
-    headers: { 'Content-Type': 'application/json' } 
-  };
-  if (data) options.body = JSON.stringify(data);
-  const res = await fetch(url, options);
-  return res.json();
-}
+        // ============================================
+        // DEACTIVATE CODE
+        // ============================================
+        async function deactivateCode(code) {
+            if (!confirm(`Deactivate code ${code}?\n\nAll devices using this code will be revoked.`)) return;
+            
+            try {
+                const response = await fetch(`/api/code/${code}/deactivate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Code ${code} deactivated! ${data.devicesRevoked || 0} devices revoked.`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-function showToast(message, type = 'info') {
-  alert(message);
-}
+        // ============================================
+        // EXTEND CODE
+        // ============================================
+        async function extendCode(code) {
+            const maxDevices = prompt(`Enter new max devices for code ${code}:`, '10');
+            if (!maxDevices) return;
+            if (isNaN(maxDevices) || parseInt(maxDevices) < 1) {
+                alert('Please enter a valid number');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/code/${code}/extend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maxDevices: parseInt(maxDevices) })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Code ${code} extended to ${maxDevices} devices`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// GENERATE CODE
-// ============================================
-async function generateCodeSimple() {
-  const username = document.getElementById('gen-username').value.trim();
-  const maxDevices = parseInt(document.getElementById('gen-max-devices').value) || 10;
-  const resultDiv = document.getElementById('gen-result');
-  const genBtn = document.getElementById('gen-btn');
-  
-  if (!username) {
-    resultDiv.innerHTML = '⚠️ Please enter a username';
-    resultDiv.style.color = '#f85149';
-    return;
-  }
-  
-  if (maxDevices < 1) {
-    resultDiv.innerHTML = '⚠️ Max devices must be at least 1';
-    resultDiv.style.color = '#f85149';
-    return;
-  }
-  
-  resultDiv.innerHTML = '⏳ Generating code...';
-  resultDiv.style.color = '#d29922';
-  genBtn.disabled = true;
-  genBtn.textContent = '⏳...';
-  
-  try {
-    const result = await apiRequest('/api/generate-code', 'POST', { 
-      username: username,
-      maxDevices: maxDevices
-    });
-    
-    if (result.success) {
-      resultDiv.innerHTML = '✅ Code: <strong style="font-size:18px;color:#58a6ff;">' + result.code + '</strong> for <strong>' + result.username + '</strong> (max ' + result.maxDevices + ' devices)';
-      resultDiv.style.color = '#3fb950';
-      showToast('✅ Code generated: ' + result.code + ' for ' + username, 'success');
-      document.getElementById('gen-username').value = '';
-      setTimeout(() => location.reload(), 2000);
-    } else {
-      resultDiv.innerHTML = '❌ ' + (result.error || 'Failed to generate code');
-      resultDiv.style.color = '#f85149';
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    resultDiv.innerHTML = '❌ Error: ' + e.message;
-    resultDiv.style.color = '#f85149';
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-  
-  genBtn.disabled = false;
-  genBtn.textContent = '🚀 Generate';
-}
+        // ============================================
+        // REMOVE DEVICE
+        // ============================================
+        async function removeDevice(deviceId) {
+            if (!confirm(`Remove device ${deviceId}?\n\nThis will free up a slot on the code.`)) return;
+            
+            try {
+                const response = await fetch(`/api/device/${deviceId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Device removed! Slot freed.`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-document.getElementById('gen-username').addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') generateCodeSimple();
-});
-document.getElementById('gen-max-devices').addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') generateCodeSimple();
-});
+        // ============================================
+        // REACTIVATE DEVICE
+        // ============================================
+        async function reactivateDevice(deviceId) {
+            if (!confirm(`Reactivate device ${deviceId}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/reactivate/${deviceId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Device reactivated!`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// DEACTIVATE CODE
-// ============================================
-async function deactivateCode(code) {
-  if (!confirm('Deactivate code ' + code + '? Users with this code will lose access.')) return;
-  try {
-    const result = await apiRequest('/api/code/' + code + '/deactivate', 'POST');
-    if (result.success) {
-      showToast('✅ Code deactivated', 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
+        // ============================================
+        // APPROVE REQUEST (More Slots)
+        // ============================================
+        async function approveRequest(requestId) {
+            if (!confirm('Approve this request?')) return;
+            
+            try {
+                const response = await fetch(`/api/request/${requestId}/respond`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'approved', response: 'Approved by admin' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Request approved!`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// EXTEND CODE
-// ============================================
-async function extendCode(code) {
-  const newMax = prompt('Enter new max devices for code ' + code + ':', '20');
-  if (newMax === null) return;
-  const maxDevices = parseInt(newMax);
-  if (isNaN(maxDevices) || maxDevices < 1) {
-    showToast('Invalid number', 'error');
-    return;
-  }
-  try {
-    const result = await apiRequest('/api/code/' + code + '/extend', 'POST', { maxDevices });
-    if (result.success) {
-      showToast('✅ Code extended to ' + maxDevices + ' devices', 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
+        // ============================================
+        // REJECT REQUEST (More Slots)
+        // ============================================
+        async function rejectRequest(requestId) {
+            if (!confirm('Reject this request?')) return;
+            
+            try {
+                const response = await fetch(`/api/request/${requestId}/respond`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'rejected', response: 'Rejected by admin' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Request rejected`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// REMOVE USER - This will deactivate the extension immediately
-// ============================================
-async function removeUser(deviceId) {
-  if (!confirm('🗑️ Remove this user? This will FREE UP a slot and the device will need to re-enter the code.')) return;
-  try {
-    const result = await apiRequest('/api/device/' + deviceId, 'DELETE');
-    if (result.success) {
-      showToast('✅ User removed! Slot freed. Device must re-enter code.', 'success');
-      // Wait a moment then refresh to show updated list
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
+        // ============================================
+        // GENERATE CODE FOR USER (from Code Requests tab)
+        // ============================================
+        async function generateCodeForUser(username) {
+            if (!username) {
+                alert('Invalid username');
+                return;
+            }
+            
+            if (!confirm(`Generate code for ${username}?`)) return;
+            
+            try {
+                const response = await fetch('/api/generate-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Code generated: ${data.code}\nUsername: ${data.username}\nRequest removed from list.`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// REACTIVATE DEVICE
-// ============================================
-async function reactivateDevice(deviceId) {
-  if (!confirm('Reactivate this device?')) return;
-  try {
-    const result = await apiRequest('/api/reactivate/' + deviceId, 'POST');
-    if (result.success) {
-      showToast('✅ Device reactivated', 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
+        // ============================================
+        // REJECT CODE REQUEST
+        // ============================================
+        async function rejectCodeRequest(requestId) {
+            if (!confirm('Reject this code request?')) return;
+            
+            try {
+                const response = await fetch(`/api/request/${requestId}/respond`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'rejected', response: 'Rejected by admin' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Request rejected`);
+                    location.reload();
+                } else {
+                    alert(`❌ Failed: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
 
-// ============================================
-// EDIT DEVICE - Assign code manually
-// ============================================
-async function editDevice(deviceId) {
-  const action = prompt('What would you like to do?\n\n1. Assign device to a code\n2. Remove device\n\nEnter 1 or 2:');
-  
-  if (!action) return;
-  
-  if (action === '1') {
-    const code = prompt('Enter the activation code to assign:').toUpperCase();
-    if (!code) return;
-    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) {
-      showToast('Invalid code format', 'error');
-      return;
-    }
-    
-    try {
-      const result = await apiRequest('/api/device/' + deviceId + '/assign-code', 'POST', { code });
-      if (result.success) {
-        showToast('✅ Device assigned to code: ' + code, 'success');
-        location.reload();
-      } else {
-        showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-      }
-    } catch (e) {
-      showToast('❌ Error: ' + e.message, 'error');
-    }
-  } else if (action === '2') {
-    removeUser(deviceId);
-  }
-}
-
-// ============================================
-// GENERATE CODE FOR USER (from code request)
-// ============================================
-async function generateCodeForUser(requestId, deviceId) {
-  const username = prompt('Enter username for this code:', 'user_' + (deviceId ? deviceId.substring(0,8) : ''));
-  if (username === null) return;
-  if (!username || username.trim() === '') {
-    showToast('Username is required', 'error');
-    return;
-  }
-  
-  const maxDevices = parseInt(prompt('Max devices for this code:', '10')) || 10;
-  
-  if (!confirm(`Generate code for "${username}" with ${maxDevices} device limit?`)) return;
-  
-  try {
-    const result = await apiRequest('/api/generate-code', 'POST', { 
-      username: username.trim(),
-      maxDevices: maxDevices
-    });
-    
-    if (result.success) {
-      showToast('✅ Code generated: ' + result.code + ' for ' + result.username, 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
-
-// ============================================
-// REJECT REQUEST
-// ============================================
-async function rejectRequest(requestId) {
-  if (!confirm('Reject this request?')) return;
-  try {
-    const result = await apiRequest('/api/request/' + requestId + '/respond', 'POST', { 
-      status: 'rejected',
-      response: 'Request rejected by admin'
-    });
-    if (result.success) {
-      showToast('✅ Request rejected', 'success');
-      location.reload();
-    } else {
-      showToast('❌ Failed: ' + (result.error || 'Unknown error'), 'error');
-    }
-  } catch (e) {
-    showToast('❌ Error: ' + e.message, 'error');
-  }
-}
-</script>
+        // ============================================
+        // AUTO REFRESH (every 30 seconds)
+        // ============================================
+        // setInterval(() => {
+        //     if (!document.hidden) {
+        //         location.reload();
+        //     }
+        // }, 30000);
+    </script>
 </body>
 </html>
