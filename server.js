@@ -93,12 +93,11 @@ app.get('/logout', (req, res) => {
 });
 
 app.get('/dashboard', isAuthenticated, async (req, res) => {
-  // FIXED: Only get PENDING requests for the request list
   const devices = await db.getDevices();
   const stats = await db.getStats();
-  const codes = await db.getAllCodes(); // Get all codes (including inactive)
-  const pendingRequests = await db.getPendingRequests(); // Only pending
-  const codeRequests = await db.getPendingCodeRequests(); // Only pending code requests
+  const codes = await db.getAllCodes();
+  const pendingRequests = await db.getPendingRequests();
+  const codeRequests = await db.getPendingCodeRequests();
   
   res.render('dashboard', { 
     username: req.session.username,
@@ -260,23 +259,33 @@ app.post('/api/request-code', async (req, res) => {
 });
 
 // ---------- GENERATE CODE ----------
-// FIXED: Removes the pending request entirely after generating code
+// FIXED: Uses device_id from request, no maxDevices needed
 
 app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
-  const { username, maxDevices = 10 } = req.body;
+  const { deviceId } = req.body;
   
-  if (!username || username.trim() === '') {
-    return res.status(400).json({ error: 'Username is required' });
+  if (!deviceId || deviceId.trim() === '') {
+    return res.status(400).json({ error: 'Device ID is required' });
   }
   
   try {
-    // Generate the code
-    const code = await db.generateCode(maxDevices, req.session.username, `For user: ${username}`);
+    // Check if there's a pending request for this device
+    const pendingRequest = await db.get(
+      `SELECT * FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
+      [deviceId]
+    );
     
-    // FIXED: Delete the pending request completely (not just update)
+    if (!pendingRequest) {
+      return res.status(404).json({ error: 'No pending request found for this device' });
+    }
+    
+    // Generate the code (max 10 devices per code)
+    const code = await db.generateCode(10, req.session.username, `For device: ${deviceId}`);
+    
+    // FIXED: Delete the pending request completely
     await db.run(
       `DELETE FROM requests WHERE device_id = ? AND code IS NULL AND status = 'pending'`,
-      [username]
+      [deviceId]
     );
     
     // Also update any device with this device_id to have the code
@@ -284,19 +293,18 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
       `UPDATE devices 
        SET code = ?, status = 'approved', approved_at = CURRENT_TIMESTAMP
        WHERE device_id = ?`,
-      [code, username]
+      [code, deviceId]
     );
     
     // Log the action
-    await db.logUsage(username, code, 'code_generated', 
-      `Code ${code} generated for ${username} by ${req.session.username}`);
+    await db.logUsage(deviceId, code, 'code_generated', 
+      `Code ${code} generated for ${deviceId} by ${req.session.username}`);
     
     res.json({ 
       success: true, 
       code: code,
-      username: username,
-      maxDevices: maxDevices,
-      message: `Code generated for ${username}`
+      deviceId: deviceId,
+      message: `Code ${code} generated for ${deviceId}`
     });
   } catch (error) {
     console.error('Generate code error:', error);
@@ -305,7 +313,6 @@ app.post('/api/generate-code', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- GET ALL CODES ----------
-// FIXED: Only return active codes
 
 app.get('/api/codes', isApiAuthenticated, async (req, res) => {
   try {
@@ -347,7 +354,6 @@ app.get('/api/code/:code/usage', isApiAuthenticated, async (req, res) => {
 });
 
 // ---------- DEACTIVATE CODE ----------
-// FIXED: Deactivates code and removes from active list
 
 app.post('/api/code/:code/deactivate', isApiAuthenticated, async (req, res) => {
   const { code } = req.params;
